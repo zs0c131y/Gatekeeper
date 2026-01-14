@@ -9,6 +9,6 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 
 If you wish to use this software in a proprietary application **without open-sourcing your code**, please contact us for a commercial license:
 
-- **Adarsh Gupta**: <gupta@adarshg.dev>  
+- **Adarsh Gupta**: <g.adarsh@hotmail.com>  
 - **Arden Diago**: <diagoarden@gmail.com>  
 - **Sounak Chakraborty**: <sounakchakraborty@mca.christuniversity.in>
