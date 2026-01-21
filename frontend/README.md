@@ -1,16 +1,77 @@
-# React + Vite
+# Gatekeeper Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Premium landing page for the Intelligent Adaptive API Gateway.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **React 19** - UI Framework
+- **Tailwind CSS 3** - Styling with custom AMOLED dark theme
+- **Framer Motion** - Animations
+- **Lucide React** - Icons
+- **Vite 7** - Build tool
 
-## Expanding the ESLint configuration
+## Design System
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Colors
+| Token | Value | Usage |
+|-------|-------|-------|
+| `background` | `#000000` | Main background |
+| `surface` | `#111111` | Cards |
+| `primary` | `#f59e0b` | Amber accent |
+| `success` | `#10b981` | Success states |
+
+### Custom CSS Classes
+```css
+.glass          /* Backdrop blur effect */
+.gradient-text  /* Amber gradient text */
+.glow-amber     /* Subtle amber glow */
+```
+
+## Components
+
+Reusable components in `src/LandingPage/ui/`:
+
+```jsx
+// Button with variants
+<Button variant="primary" size="lg">Get Started</Button>
+
+// Dark glass card
+<Card hover glow>Content</Card>
+
+// Section wrapper
+<Section id="features">
+  <SectionHeader title="Title" subtitle="Subtitle" />
+</Section>
+```
+
+## Customization
+
+Edit `tailwind.config.js` to change theme colors:
+```js
+primary: { DEFAULT: '#f59e0b' }
+```
+
+## Build
+
+```bash
+npm run build    # Production build (~117KB gzipped)
+npm run preview  # Preview production
+npm run lint     # ESLint
+```
+
+## Structure
+
+```
+src/
+├── LandingPage/     # All landing page sections
+│   └── ui/          # Reusable components
+├── lib/utils.js     # cn() utility
+└── index.css        # Tailwind + custom styles
+```
