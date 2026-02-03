@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Zap } from 'lucide-react';
+import { Menu, X, Zap, LayoutDashboard } from 'lucide-react';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 
@@ -43,8 +43,15 @@ export function Navigation() {
                     ))}
                 </div>
 
-                {/* CTA Button */}
-                <div className="hidden md:block">
+                {/* CTA Buttons */}
+                <div className="hidden md:flex items-center gap-3">
+                    <a
+                        href="/dashboard"
+                        className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors text-sm font-medium"
+                    >
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard
+                    </a>
                     <Button size="sm">Get Started</Button>
                 </div>
 
@@ -78,6 +85,14 @@ export function Navigation() {
                                     {link.label}
                                 </a>
                             ))}
+                            <a
+                                href="/dashboard"
+                                onClick={() => setIsOpen(false)}
+                                className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors py-2 text-lg"
+                            >
+                                <LayoutDashboard className="w-5 h-5" />
+                                Dashboard
+                            </a>
                             <Button className="w-full mt-4">Get Started</Button>
                         </div>
                     </motion.div>

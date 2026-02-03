@@ -29,25 +29,25 @@ export function LandingPage() {
             {/* Main Content */}
             <main className="relative">
                 <Hero />
-
+                
                 <SectionDivider />
                 <ProblemSolution />
-
+                
                 <SectionDivider />
                 <FeaturesBento />
-
+                
                 <SectionDivider />
                 <HowItWorks />
-
+                
                 <SectionDivider />
                 <LiveMetrics />
-
+                
                 <SectionDivider />
                 <TechStack />
-
+                
                 <SectionDivider />
                 <Stats />
-
+                
                 <SectionDivider />
                 <FinalCTA />
             </main>
