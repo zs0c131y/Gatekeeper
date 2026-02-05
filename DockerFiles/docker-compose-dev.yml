@@ -35,6 +35,7 @@ services:
       - ./Env/mongo.env      
     volumes:
       - mongo_data:/data/db
+      - ./Dev/SharedDrive/mongo:/data/db
 
   mongo-express:
     image: mongo-express:latest
@@ -55,6 +56,7 @@ services:
     volumes:
       - redis_data:/data
       - ../redis/users.acl:/usr/local/etc/redis/users.acl
+      - ./Dev/SharedDrive/redis:/data
   
   redis-insight:
     image: redis/redisinsight:latest
