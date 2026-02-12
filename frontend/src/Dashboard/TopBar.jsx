@@ -1,4 +1,4 @@
-import { Search, Bell, User, ChevronRight, Zap } from 'lucide-react';
+import { Search, Bell, User, ChevronRight } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
@@ -9,20 +9,14 @@ const breadcrumbMap = {
     '/dashboard/settings': ['Dashboard', 'Settings'],
 };
 
-export function TopBar({ sidebarCollapsed }) {
+export function TopBar() {
     const location = useLocation();
     const breadcrumbs = breadcrumbMap[location.pathname] || ['Dashboard'];
 
     return (
         <header className="h-16 bg-[#0a0a0a] border-b border-white/10 flex items-center px-6 gap-6 sticky top-0 z-40">
-            {/* Logo (when sidebar collapsed) & Breadcrumbs */}
+            {/* Breadcrumbs */}
             <div className="flex items-center gap-4 flex-1">
-                {sidebarCollapsed && (
-                    <a href="/" className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center hover:opacity-80 transition-opacity">
-                        <Zap className="w-5 h-5 text-black" />
-                    </a>
-                )}
-                
                 <div className="flex items-center gap-2 text-sm">
                     {breadcrumbs.map((crumb, index) => (
                         <div key={index} className="flex items-center gap-2">

@@ -64,9 +64,23 @@ export function Sidebar({ collapsed, onToggle }) {
             {/* Collapse Toggle */}
             <button
                 onClick={onToggle}
-                className="h-12 flex items-center justify-center border-t border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                className="h-14 flex items-center justify-center gap-2 border-t border-white/10 text-gray-400 hover:text-amber-400 hover:bg-gradient-to-r hover:from-amber-500/10 hover:to-orange-500/10 transition-all duration-300 group relative"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-                {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 to-orange-500/0 group-hover:from-amber-500/5 group-hover:to-orange-500/5 transition-all duration-300" />
+                {collapsed ? (
+                    <>
+                        <ChevronRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+                        <div className="absolute left-full ml-2 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-black text-sm font-medium rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 whitespace-nowrap z-50 shadow-lg shadow-amber-500/25">
+                            Expand Sidebar
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <ChevronLeft className="w-5 h-5 transform group-hover:-translate-x-0.5 transition-transform" />
+                        <span className="text-sm font-medium">Collapse</span>
+                    </>
+                )}
             </button>
         </aside>
     );

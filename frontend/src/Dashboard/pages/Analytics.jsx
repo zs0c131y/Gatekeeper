@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Download, Calendar } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 // Mock data
 const trafficData = Array.from({ length: 24 }, (_, i) => ({
@@ -73,39 +75,45 @@ export function Analytics() {
     return (
         <div className="space-y-6">
             {/* Time Range Selector */}
-            <div className="bg-[#111111] border border-white/10 rounded-xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-gray-400" />
-                    <div className="flex gap-2">
-                        {timeRanges.map((range) => (
-                            <button
-                                key={range}
-                                onClick={() => setSelectedRange(range)}
-                                className={cn(
-                                    "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                                    selectedRange === range
-                                        ? "bg-amber-500 text-black"
-                                        : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-                                )}
-                            >
-                                {range}
-                            </button>
-                        ))}
+            <Card className="bg-[#111111] border-white/10">
+                <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-gray-400" />
+                        <div className="flex gap-2">
+                            {timeRanges.map((range) => (
+                                <Button
+                                    key={range}
+                                    onClick={() => setSelectedRange(range)}
+                                    variant={selectedRange === range ? "default" : "outline"}
+                                    size="sm"
+                                    className={cn(
+                                        selectedRange === range
+                                            ? "bg-amber-500 text-black hover:bg-amber-600"
+                                            : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border-white/10"
+                                    )}
+                                >
+                                    {range}
+                                </Button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-white transition-colors">
-                    <Download className="w-4 h-4" />
-                    Export
-                </button>
-            </div>
+                    <Button variant="outline" size="sm" className="bg-white/5 hover:bg-white/10 border-white/10 text-white">
+                        <Download className="w-4 h-4" />
+                        Export
+                    </Button>
+                </CardContent>
+            </Card>
 
             {/* Traffic Analytics Section */}
             <div>
                 <h2 className="text-2xl font-bold text-white mb-4">Traffic Analytics</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Requests Over Time */}
-                    <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Requests Over Time</h3>
+                    <Card className="bg-[#111111] border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Requests Over Time</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={trafficData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
@@ -123,11 +131,15 @@ export function Analytics() {
                                 <Line type="monotone" dataKey="errors" stroke="#ef4444" strokeWidth={2} name="Errors" />
                             </LineChart>
                         </ResponsiveContainer>
-                    </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Traffic Heatmap */}
-                    <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Traffic Heatmap</h3>
+                    <Card className="bg-[#111111] border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Traffic Heatmap</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <div className="grid grid-cols-24 gap-1">
                             {heatmapData.map((cell, i) => (
                                 <div
@@ -153,7 +165,8 @@ export function Analytics() {
                             </div>
                             <span>More</span>
                         </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
 
@@ -162,15 +175,16 @@ export function Analytics() {
                 <h2 className="text-2xl font-bold text-white mb-4">Endpoint Performance</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Performance Table */}
-                    <div className="lg:col-span-2 bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-white">Endpoint Metrics</h3>
+                    <Card className="lg:col-span-2 bg-[#111111] border-white/10">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                            <CardTitle className="text-lg">Endpoint Metrics</CardTitle>
                             <input
                                 type="text"
                                 placeholder="Search endpoints..."
                                 className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                             />
-                        </div>
+                        </CardHeader>
+                        <CardContent>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
@@ -199,11 +213,15 @@ export function Analytics() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Latency Distribution */}
-                    <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Latency Distribution</h3>
+                    <Card className="bg-[#111111] border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Latency Distribution</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={latencyDistribution} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
@@ -233,7 +251,8 @@ export function Analytics() {
                                 <span className="text-red-400 font-mono">289ms</span>
                             </div>
                         </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
 
@@ -242,8 +261,11 @@ export function Analytics() {
                 <h2 className="text-2xl font-bold text-white mb-4">Error Analysis</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Errors by Type */}
-                    <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Errors by Type</h3>
+                    <Card className="bg-[#111111] border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Errors by Type</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <ResponsiveContainer width="100%" height={250}>
                             <PieChart>
                                 <Pie
@@ -279,11 +301,15 @@ export function Analytics() {
                                 </div>
                             ))}
                         </div>
-                    </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Error Timeline */}
-                    <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Error Timeline</h3>
+                    <Card className="bg-[#111111] border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Error Timeline</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <ResponsiveContainer width="100%" height={250}>
                             <AreaChart data={errorTimeline}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
@@ -301,15 +327,19 @@ export function Analytics() {
                                 <Area type="monotone" dataKey="5xx" stackId="1" stroke="#ef4444" fill="#ef4444" name="5xx Errors" />
                             </AreaChart>
                         </ResponsiveContainer>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
 
             {/* Client Activity Section */}
             <div>
                 <h2 className="text-2xl font-bold text-white mb-4">Client Activity</h2>
-                <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Top Clients</h3>
+                <Card className="bg-[#111111] border-white/10">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Top Clients</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
@@ -356,7 +386,8 @@ export function Analytics() {
                             </tbody>
                         </table>
                     </div>
-                </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
