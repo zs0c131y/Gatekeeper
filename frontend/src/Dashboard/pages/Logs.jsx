@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Search, Filter, X, Copy, Eye, Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 // Mock log data
 const generateLogs = () => {

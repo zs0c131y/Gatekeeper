@@ -11,7 +11,7 @@ export function DashboardLayout() {
             <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
             
             <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-                <TopBar sidebarCollapsed={sidebarCollapsed} />
+                <TopBar />
                 
                 <main className="flex-1 p-6 overflow-auto">
                     <Outlet />
