@@ -1,0 +1,72 @@
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: DockerFiles/Dev/frontend.Dockerfile
+    image: frontend:dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+
+  backend:
+    build:
+      context: ..
+      dockerfile: DockerFiles/Dev/backend.Dockerfile
+    image: backend:dev
+    ports:
+      - "9000:9000"
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+    env_file:
+      - ./Env/backend.env
+    depends_on:
+      - mongo
+      - redis
+
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    env_file:
+      - ./Env/mongo.env      
+    volumes:
+      - mongo_data:/data/db
+      - ./Dev/SharedDrive/mongo:/data/db
+
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    env_file:
+      - ./Env/mongo-express.env
+      
+    depends_on:
+      - mongo
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --aclfile /usr/local/etc/redis/users.acl
+    volumes:
+      - redis_data:/data
+      - ../redis/users.acl:/usr/local/etc/redis/users.acl
+      - ./Dev/SharedDrive/redis:/data
+  
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "8082:5540"
+    depends_on:
+      - redis
+
+
+volumes:
+  mongo_data:
+  redis_data:
