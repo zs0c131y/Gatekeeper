@@ -4,52 +4,14 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import { cn } from '../../lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useApi } from '../../hooks/useApi';
+import { api } from '../../utils/api';
+import { MetricCardsLoading, ChartLoading, TableLoading } from '../../components/common/LoadingSkeleton';
+import { ErrorMessage } from '../../components/common/ErrorMessage';
+import { EmptyState } from '../../components/common/EmptyState';
 
-// Mock data generators
-const generateSparklineData = () => {
-    return Array.from({ length: 12 }, (_, i) => ({
-        value: Math.floor(Math.random() * 100) + 50
-    }));
-};
-
-const generateLiveTrafficData = () => {
-    return Array.from({ length: 60 }, (_, i) => ({
-        time: i,
-        requests: Math.floor(Math.random() * 50) + 20
-    }));
-};
-
-const topEndpoints = [
-    { endpoint: '/api/users', requests: 12543, latency: 45, errorRate: 0.2 },
-    { endpoint: '/api/products', requests: 9821, latency: 89, errorRate: 1.1 },
-    { endpoint: '/api/orders', requests: 7654, latency: 156, errorRate: 0.5 },
-    { endpoint: '/api/auth/login', requests: 5432, latency: 23, errorRate: 2.3 },
-    { endpoint: '/api/cart', requests: 4321, latency: 67, errorRate: 0.8 },
-    { endpoint: '/api/search', requests: 3210, latency: 234, errorRate: 1.9 },
-    { endpoint: '/api/checkout', requests: 2109, latency: 189, errorRate: 3.2 },
-    { endpoint: '/api/reviews', requests: 1876, latency: 98, errorRate: 0.4 },
-    { endpoint: '/api/wishlist', requests: 1543, latency: 54, errorRate: 0.6 },
-    { endpoint: '/api/notifications', requests: 1234, latency: 32, errorRate: 0.1 },
-];
-
-const circuitBreakers = [
-    { name: 'users-service', state: 'CLOSED', health: 98, lastChange: '2 hours ago' },
-    { name: 'products-service', state: 'CLOSED', health: 95, lastChange: '5 hours ago' },
-    { name: 'orders-service', state: 'HALF_OPEN', health: 72, lastChange: '15 minutes ago' },
-    { name: 'payments-service', state: 'CLOSED', health: 99, lastChange: '1 day ago' },
-    { name: 'inventory-service', state: 'OPEN', health: 45, lastChange: '3 minutes ago' },
-];
-
-const recentAlerts = [
-    { time: '2m ago', type: 'error', message: 'High error rate on /api/checkout' },
-    { time: '5m ago', type: 'warning', message: 'Circuit breaker opened for inventory-service' },
-    { time: '12m ago', type: 'info', message: 'Rate limit reached for client 192.168.1.45' },
-    { time: '25m ago', type: 'error', message: 'Backend timeout on orders-service' },
-    { time: '1h ago', type: 'warning', message: 'High latency detected on /api/search' },
-];
-
-function MetricCard({ title, value, change, trend, sparklineData, icon: Icon, color }) {
-    const isPositive = change > 0;
+function MetricCard({ title, value, change, trend, icon: Icon, color }) {
+    const isPositive = change && parseFloat(change) > 0;
     
     return (
         <Card className="bg-[#111111] border-white/10 hover:border-amber-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10">
@@ -84,7 +46,7 @@ function MetricCard({ title, value, change, trend, sparklineData, icon: Icon, co
                     </div>
                 </div>
             
-            <div className="flex items-end justify-between">
+            {change && (
                 <div className="flex items-center gap-2">
                     {isPositive ? (
                         <TrendingUp className="w-4 h-4 text-green-400" />
@@ -95,50 +57,69 @@ function MetricCard({ title, value, change, trend, sparklineData, icon: Icon, co
                         "text-sm font-medium",
                         isPositive ? 'text-green-400' : 'text-red-400'
                     )}>
-                        {Math.abs(change)}%
+                        {change}
                     </span>
                     <span className="text-gray-500 text-xs">{trend}</span>
                 </div>
-                
-                <div className="w-20 h-8">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={sparklineData}>
-                            <Line 
-                                type="monotone" 
-                                dataKey="value" 
-                                stroke="#f59e0b" 
-                                strokeWidth={2} 
-                                dot={false} 
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
+            )}
             </CardContent>
         </Card>
     );
 }
 
 export function Overview() {
-    const [liveData, setLiveData] = useState(generateLiveTrafficData());
+    const { data: overviewData, loading, error, refetch } = useApi(() => api.getOverview());
     const [isPaused, setIsPaused] = useState(false);
-    const [isConnected, setIsConnected] = useState(true);
 
+    // Auto-refresh every 30 seconds
     useEffect(() => {
         if (isPaused) return;
         
         const interval = setInterval(() => {
-            setLiveData(prev => {
-                const newData = [...prev.slice(1), {
-                    time: prev[prev.length - 1].time + 1,
-                    requests: Math.floor(Math.random() * 50) + 20
-                }];
-                return newData;
-            });
-        }, 1000);
+            refetch();
+        }, 30000);
 
         return () => clearInterval(interval);
-    }, [isPaused]);
+    }, [isPaused, refetch]);
+
+    const getLatencyColor = (latency) => {
+        if (latency < 50) return 'text-green-400';
+        if (latency < 100) return 'text-amber-400';
+        return 'text-red-400';
+    };
+
+    const getErrorRateColor = (rate) => {
+        if (rate < 1) return 'text-green-400';
+        if (rate < 2) return 'text-amber-400';
+        return 'text-red-400';
+    };
+
+    // Show loading state
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <MetricCardsLoading />
+                <ChartLoading />
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    <TableLoading rows={10} />
+                    <div className="lg:col-span-2 space-y-6">
+                        <ChartLoading />
+                        <ChartLoading />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error) {
+        return <ErrorMessage error={error} onRetry={refetch} />;
+    }
+
+    // Show empty state if no data
+    if (!overviewData) {
+        return <EmptyState message="No overview data available" />;
+    }
 
     const getLatencyColor = (latency) => {
         if (latency < 50) return 'text-green-400';
@@ -158,38 +139,34 @@ export function Overview() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
                     title="Total Requests"
-                    value="1.2M"
-                    change={12.5}
+                    value={overviewData.totalRequests?.toLocaleString() || '0'}
+                    change={overviewData.requestsChange}
                     trend="vs last hour"
-                    sparklineData={generateSparklineData()}
                     icon={Activity}
                 />
                 <MetricCard
                     title="Avg Latency"
-                    value="67ms"
-                    change={-8.3}
+                    value={`${overviewData.avgLatency || 0}ms`}
+                    change={overviewData.latencyChange}
                     trend="vs last hour"
-                    sparklineData={generateSparklineData()}
                     icon={Clock}
                     color="green"
                 />
                 <MetricCard
                     title="Error Rate"
-                    value="1.2%"
-                    change={15.2}
+                    value={`${overviewData.errorRate || 0}%`}
+                    change={overviewData.errorRateChange}
                     trend="vs last hour"
-                    sparklineData={generateSparklineData()}
                     icon={AlertTriangle}
-                    color="amber"
+                    color={overviewData.errorRate < 1 ? 'green' : overviewData.errorRate < 2 ? 'amber' : 'red'}
                 />
                 <MetricCard
                     title="Active Backends"
-                    value="4/5"
-                    change={-20}
-                    trend="1 degraded"
-                    sparklineData={generateSparklineData()}
+                    value={`${overviewData.activeBackends || 0}/${overviewData.backends?.length || 0}`}
+                    change={overviewData.backendsChange}
+                    trend={overviewData.activeBackends === overviewData.backends?.length ? 'all healthy' : 'degraded'}
                     icon={Server}
-                    color="red"
+                    color={overviewData.activeBackends === overviewData.backends?.length ? 'green' : 'red'}
                 />
             </div>
 
@@ -197,15 +174,15 @@ export function Overview() {
             <Card className="bg-[#111111] border-white/10">
                 <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
-                        <CardTitle>Live Traffic</CardTitle>
+                        <CardTitle>Traffic Overview</CardTitle>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
                                 <div className={cn(
                                     "w-2 h-2 rounded-full",
-                                    isConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
+                                    !loading ? "bg-green-400 animate-pulse" : "bg-red-400"
                                 )}></div>
                                 <span className="text-sm text-gray-400">
-                                    {isConnected ? 'Connected' : 'Disconnected'}
+                                    {!loading ? 'Connected' : 'Loading...'}
                                 </span>
                             </div>
                             <Button
@@ -214,50 +191,58 @@ export function Overview() {
                                 size="sm"
                                 className="bg-white/5 hover:bg-white/10 border-white/10 text-white"
                             >
-                                {isPaused ? 'Resume' : 'Pause'}
+                                {isPaused ? 'Resume Auto-Refresh' : 'Pause Auto-Refresh'}
                             </Button>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={liveData}>
-                        <defs>
-                            <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                        <XAxis 
-                            dataKey="time" 
-                            stroke="#666" 
-                            tick={{ fill: '#666' }}
-                            label={{ value: 'Seconds', position: 'insideBottom', offset: -5, fill: '#666' }}
-                        />
-                        <YAxis 
-                            stroke="#666" 
-                            tick={{ fill: '#666' }}
-                            label={{ value: 'Requests/sec', angle: -90, position: 'insideLeft', fill: '#666' }}
-                        />
-                        <Tooltip 
-                            contentStyle={{ 
-                                backgroundColor: '#1a1a1a', 
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '8px'
-                            }}
-                            labelStyle={{ color: '#999' }}
-                        />
-                        <Area 
-                            type="monotone" 
-                            dataKey="requests" 
-                            stroke="#f59e0b" 
-                            strokeWidth={2}
-                            fillOpacity={1} 
-                            fill="url(#colorRequests)" 
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
+                {overviewData.trafficData && overviewData.trafficData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={overviewData.trafficData}>
+                            <defs>
+                                <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                            <XAxis 
+                                dataKey="timestamp" 
+                                stroke="#666" 
+                                tick={{ fill: '#666' }}
+                                tickFormatter={(value) => {
+                                    const date = new Date(value);
+                                    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                                }}
+                            />
+                            <YAxis 
+                                stroke="#666" 
+                                tick={{ fill: '#666' }}
+                                label={{ value: 'Requests', angle: -90, position: 'insideLeft', fill: '#666' }}
+                            />
+                            <Tooltip 
+                                contentStyle={{ 
+                                    backgroundColor: '#1a1a1a', 
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '8px'
+                                }}
+                                labelStyle={{ color: '#999' }}
+                                labelFormatter={(value) => new Date(value).toLocaleString()}
+                            />
+                            <Area 
+                                type="monotone" 
+                                dataKey="requests" 
+                                stroke="#f59e0b" 
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorRequests)" 
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <EmptyState message="No traffic data available" icon="inbox" />
+                )}
                 </CardContent>
             </Card>
 
@@ -269,97 +254,86 @@ export function Overview() {
                         <CardTitle>Top Endpoints</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-white/10">
-                                        <th className="text-left text-sm font-medium text-gray-400 pb-3">Endpoint</th>
-                                        <th className="text-right text-sm font-medium text-gray-400 pb-3">Requests</th>
-                                        <th className="text-right text-sm font-medium text-gray-400 pb-3">Avg Latency</th>
-                                        <th className="text-right text-sm font-medium text-gray-400 pb-3">Error Rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {topEndpoints.map((endpoint, index) => (
-                                        <tr 
-                                            key={index}
-                                            className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
-                                        >
-                                            <td className="py-3 text-sm text-white font-mono">{endpoint.endpoint}</td>
-                                            <td className="py-3 text-sm text-gray-300 text-right">{endpoint.requests.toLocaleString()}</td>
-                                            <td className={cn("py-3 text-sm text-right font-medium", getLatencyColor(endpoint.latency))}>
-                                                {endpoint.latency}ms
-                                            </td>
-                                            <td className={cn("py-3 text-sm text-right font-medium", getErrorRateColor(endpoint.errorRate))}>
-                                                {endpoint.errorRate}%
-                                            </td>
+                        {overviewData.topEndpoints && overviewData.topEndpoints.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-white/10">
+                                            <th className="text-left text-sm font-medium text-gray-400 pb-3">Endpoint</th>
+                                            <th className="text-right text-sm font-medium text-gray-400 pb-3">Requests</th>
+                                            <th className="text-right text-sm font-medium text-gray-400 pb-3">Avg Latency</th>
+                                            <th className="text-right text-sm font-medium text-gray-400 pb-3">Error Rate</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {overviewData.topEndpoints.map((endpoint, index) => (
+                                            <tr 
+                                                key={index}
+                                                className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                                            >
+                                                <td className="py-3 text-sm text-white font-mono">{endpoint.endpoint}</td>
+                                                <td className="py-3 text-sm text-gray-300 text-right">{endpoint.requests?.toLocaleString()}</td>
+                                                <td className={cn("py-3 text-sm text-right font-medium", getLatencyColor(endpoint.avgLatency))}>
+                                                    {endpoint.avgLatency}ms
+                                                </td>
+                                                <td className={cn("py-3 text-sm text-right font-medium", getErrorRateColor(endpoint.errorRate))}>
+                                                    {endpoint.errorRate}%
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <EmptyState message="No endpoint data available" icon="search" />
+                        )}
                     </CardContent>
                 </Card>
 
-                {/* Right Column - Circuit Breaker Status & Recent Alerts */}
+                {/* Right Column - Circuit Breaker Status */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Circuit Breaker Status */}
                     <Card className="bg-[#111111] border-white/10">
                         <CardHeader>
-                            <CardTitle className="text-lg">Circuit Breaker Status</CardTitle>
+                            <CardTitle className="text-lg">Backend Services</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-3">
-                                {circuitBreakers.map((cb, index) => (
-                                    <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-sm font-medium text-white">{cb.name}</span>
-                                                <span className={cn(
-                                                    "px-2 py-0.5 text-xs font-semibold rounded",
-                                                    cb.state === 'CLOSED' && 'bg-green-500/20 text-green-400',
-                                                    cb.state === 'OPEN' && 'bg-red-500/20 text-red-400',
-                                                    cb.state === 'HALF_OPEN' && 'bg-amber-500/20 text-amber-400'
-                                                )}>
-                                                    {cb.state}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs text-gray-400">Health: {cb.health}%</span>
-                                                <span className="text-xs text-gray-500">{cb.lastChange}</span>
+                            {overviewData.backends && overviewData.backends.length > 0 ? (
+                                <div className="space-y-3">
+                                    {overviewData.backends.map((backend, index) => (
+                                        <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-sm font-medium text-white">{backend.name}</span>
+                                                    <span className={cn(
+                                                        "px-2 py-0.5 text-xs font-semibold rounded",
+                                                        backend.circuitState === 'CLOSED' && 'bg-green-500/20 text-green-400',
+                                                        backend.circuitState === 'OPEN' && 'bg-red-500/20 text-red-400',
+                                                        backend.circuitState === 'HALF_OPEN' && 'bg-amber-500/20 text-amber-400'
+                                                    )}>
+                                                        {backend.circuitState || 'CLOSED'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xs text-gray-400">
+                                                        Health: {backend.healthScore}%
+                                                    </span>
+                                                    <span className={cn(
+                                                        "text-xs",
+                                                        backend.status === 'healthy' && 'text-green-400',
+                                                        backend.status === 'degraded' && 'text-amber-400',
+                                                        backend.status === 'unhealthy' && 'text-red-400'
+                                                    )}>
+                                                        {backend.status}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Recent Alerts */}
-                    <Card className="bg-[#111111] border-white/10">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Recent Alerts</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {recentAlerts.map((alert, index) => (
-                                    <div key={index} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
-                                        <div className={cn(
-                                            "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
-                                            alert.type === 'error' && 'bg-red-400',
-                                            alert.type === 'warning' && 'bg-amber-400',
-                                            alert.type === 'info' && 'bg-blue-400'
-                                        )}></div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-white">{alert.message}</p>
-                                            <p className="text-xs text-gray-500 mt-1">{alert.time}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <Button variant="link" className="w-full mt-4 text-amber-400 hover:text-amber-300">
-                                View All Alerts →
-                            </Button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyState message="No backend services" icon="server" />
+                            )}
                         </CardContent>
                     </Card>
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Plus, Edit2, Trash2, Key, RefreshCw, Copy, Shield, Lock, Globe, Server, Eye, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useApi } from '../../hooks/useApi';
+import { api } from '../../utils/api';
+import { LoadingSkeleton } from '../../components/common/LoadingSkeleton';
+import { ErrorMessage } from '../../components/common/ErrorMessage';
+import { EmptyState } from '../../components/common/EmptyState';
 
 const tabs = [
     { id: 'general', label: 'General' },
@@ -19,21 +24,27 @@ const tabs = [
     { id: 'alerts', label: 'Alerts' },
 ];
 
-const backends = [
-    { name: 'users-service', url: 'http://localhost:3001', health: '/health', status: 'healthy', weight: 1 },
-    { name: 'products-service', url: 'http://localhost:3002', health: '/health', status: 'healthy', weight: 1 },
-    { name: 'orders-service', url: 'http://localhost:3003', health: '/health', status: 'degraded', weight: 1 },
-    { name: 'payments-service', url: 'http://localhost:3004', health: '/health', status: 'healthy', weight: 2 },
-];
-
-const apiKeys = [
-    { key: 'gk_live_abc123...', created: '2024-01-15', lastUsed: '2 hours ago' },
-    { key: 'gk_live_def456...', created: '2024-01-10', lastUsed: '5 minutes ago' },
-    { key: 'gk_test_xyz789...', created: '2024-01-05', lastUsed: 'Never' },
-];
-
 export function Settings() {
     const [activeTab, setActiveTab] = useState('general');
+    const [saveStatus, setSaveStatus] = useState(null);
+
+    // Fetch settings and backends
+    const { data: settingsData, loading: settingsLoading, error: settingsError, refetch: refetchSettings } = useApi(() => api.getSettings());
+    const { data: backendsData, loading: backendsLoading, error: backendsError, refetch: refetchBackends } = useApi(() => api.getBackends());
+
+    const handleSaveSettings = async (updatedSettings) => {
+        try {
+            setSaveStatus('saving');
+            await api.updateSettings(updatedSettings);
+            setSaveStatus('success');
+            setTimeout(() => setSaveStatus(null), 3000);
+            refetchSettings();
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus(null), 3000);
+        }
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -71,23 +82,74 @@ export function Settings() {
                 </div>
             </div>
 
+            {/* Save Status Toast */}
+            {saveStatus && (
+                <div className={cn(
+                    "fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-4",
+                    saveStatus === 'saving' && "bg-blue-500 text-white",
+                    saveStatus === 'success' && "bg-green-500 text-white",
+                    saveStatus === 'error' && "bg-red-500 text-white"
+                )}>
+                    {saveStatus === 'saving' && <RefreshCw className="w-4 h-4 animate-spin" />}
+                    {saveStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+                    {saveStatus === 'error' && <XCircle className="w-4 h-4" />}
+                    <span>
+                        {saveStatus === 'saving' && 'Saving...'}
+                        {saveStatus === 'success' && 'Settings saved successfully!'}
+                        {saveStatus === 'error' && 'Failed to save settings'}
+                    </span>
+                </div>
+            )}
+
             {/* Tab Content */}
             <div 
                 key={activeTab}
                 className="bg-gradient-to-br from-[#111111] to-[#0a0a0a] border border-white/10 rounded-xl p-6 shadow-2xl shadow-black/40 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-500"
             >
-                {activeTab === 'general' && <GeneralTab />}
-                {activeTab === 'ratelimiting' && <RateLimitingTab />}
-                {activeTab === 'circuitbreakers' && <CircuitBreakersTab />}
-                {activeTab === 'backends' && <BackendsTab backends={backends} />}
-                {activeTab === 'security' && <SecurityTab apiKeys={apiKeys} />}
-                {activeTab === 'alerts' && <AlertsTab />}
+                {settingsLoading ? (
+                    <LoadingSkeleton variant="card" count={3} />
+                ) : settingsError ? (
+                    <ErrorMessage error={settingsError} onRetry={refetchSettings} />
+                ) : (
+                    <>
+                        {activeTab === 'general' && <GeneralTab settings={settingsData} onSave={handleSaveSettings} />}
+                        {activeTab === 'ratelimiting' && <RateLimitingTab settings={settingsData} onSave={handleSaveSettings} />}
+                        {activeTab === 'circuitbreakers' && <CircuitBreakersTab settings={settingsData} onSave={handleSaveSettings} />}
+                        {activeTab === 'backends' && (
+                            backendsLoading ? (
+                                <LoadingSkeleton variant="card" count={3} />
+                            ) : backendsError ? (
+                                <ErrorMessage error={backendsError} onRetry={refetchBackends} />
+                            ) : (
+                                <BackendsTab backends={backendsData?.backends || []} refetch={refetchBackends} />
+                            )
+                        )}
+                        {activeTab === 'security' && <SecurityTab settings={settingsData} onSave={handleSaveSettings} />}
+                        {activeTab === 'alerts' && <AlertsTab settings={settingsData} onSave={handleSaveSettings} />}
+                    </>
+                )}
             </div>
         </div>
     );
 }
 
-function GeneralTab() {
+function GeneralTab({ settings, onSave }) {
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (settings) {
+            setFormData({
+                ...settings
+            });
+        }
+    }, [settings]);
+
+    const handleSubmit = () => {
+        onSave(formData);
+    };
+
+    if (!settings) return null;
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white">General Settings</h2>
@@ -97,7 +159,7 @@ function GeneralTab() {
                     <Label htmlFor="gateway-name" className="text-gray-300">Gateway Name</Label>
                     <Input
                         id="gateway-name"
-                        defaultValue="Gatekeeper API Gateway"
+                        value={formData.gatewayName || ''}
                         className="bg-white/5 border-white/10 text-white focus-visible:ring-amber-500/50"
                     />
                 </div>
@@ -151,7 +213,21 @@ function GeneralTab() {
     );
 }
 
-function RateLimitingTab() {
+function RateLimitingTab({ settings, onSave }) {
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (settings?.rateLimiting) {
+            setFormData(settings.rateLimiting);
+        }
+    }, [settings]);
+
+    const handleSubmit = () => {
+        onSave({ ...settings, rateLimiting: formData });
+    };
+
+    if (!settings) return null;
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white">Rate Limiting</h2>
@@ -260,7 +336,21 @@ function RateLimitingTab() {
     );
 }
 
-function CircuitBreakersTab() {
+function CircuitBreakersTab({ settings, onSave }) {
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (settings?.circuitBreaker) {
+            setFormData(settings.circuitBreaker);
+        }
+    }, [settings]);
+
+    const handleSubmit = () => {
+        onSave({ ...settings, circuitBreaker: formData });
+    };
+
+    if (!settings) return null;
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white">Circuit Breakers</h2>
@@ -326,65 +416,244 @@ function CircuitBreakersTab() {
     );
 }
 
-function BackendsTab({ backends }) {
+function BackendsTab({ backends, refetch }) {
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [editingBackend, setEditingBackend] = useState(null);
+
+    const handleDelete = async (id) => {
+        if (confirm('Are you sure you want to delete this backend?')) {
+            try {
+                await api.deleteBackend(id);
+                refetch();
+            } catch (error) {
+                console.error('Failed to delete backend:', error);
+                alert('Failed to delete backend');
+            }
+        }
+    };
+
+    const handleAdd = async (data) => {
+        try {
+            await api.createBackend(data);
+            setShowAddModal(false);
+            refetch();
+        } catch (error) {
+            console.error('Failed to create backend:', error);
+            alert('Failed to create backend');
+        }
+    };
+
+    const handleUpdate = async (id, data) => {
+        try {
+            await api.updateBackend(id, data);
+            setEditingBackend(null);
+            refetch();
+        } catch (error) {
+            console.error('Failed to update backend:', error);
+            alert('Failed to update backend');
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-white">Backend Services</h2>
-                <Button className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                <Button 
+                    onClick={() => setShowAddModal(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+                >
                     <Plus className="w-4 h-4" />
                     Add New Backend
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {backends.map((backend, i) => (
-                    <Card key={i} className="bg-white/5 border-white/10">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <CardTitle className="text-lg text-white">{backend.name}</CardTitle>
-                                    <CardDescription className="text-sm text-gray-400 font-mono">{backend.url}</CardDescription>
+            {backends.length === 0 ? (
+                <EmptyState 
+                    message="No backend services configured" 
+                    description="Add your first backend service to get started"
+                    icon="server"
+                />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {backends.map((backend) => (
+                        <Card key={backend._id} className="bg-white/5 border-white/10">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg text-white">{backend.name}</CardTitle>
+                                        <CardDescription className="text-sm text-gray-400 font-mono">{backend.base_url}</CardDescription>
+                                    </div>
+                                    <span className={cn(
+                                        "px-2 py-1 text-xs font-semibold rounded",
+                                        backend.status === 'healthy' ? "bg-green-500/20 text-green-400" : "bg-amber-500/20 text-amber-400"
+                                    )}>
+                                        {backend.status || 'unknown'}
+                                    </span>
                                 </div>
-                                <span className={cn(
-                                    "px-2 py-1 text-xs font-semibold rounded",
-                                    backend.status === 'healthy' ? "bg-green-500/20 text-green-400" : "bg-amber-500/20 text-amber-400"
-                                )}>
-                                    {backend.status}
-                                </span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Health Check:</span>
-                                    <span className="text-white font-mono">{backend.health}</span>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Health Endpoint:</span>
+                                        <span className="text-white font-mono">{backend.health_endpoint}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Health Score:</span>
+                                        <span className="text-white">{backend.health_score}%</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Load Balance Weight:</span>
+                                        <span className="text-white">{backend.weight}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Circuit State:</span>
+                                        <span className={cn(
+                                            "px-2 py-0.5 text-xs font-semibold rounded",
+                                            backend.circuit_state === 'CLOSED' && "bg-green-500/20 text-green-400",
+                                            backend.circuit_state === 'OPEN' && "bg-red-500/20 text-red-400",
+                                            backend.circuit_state === 'HALF_OPEN' && "bg-amber-500/20 text-amber-400"
+                                        )}>
+                                            {backend.circuit_state || 'CLOSED'}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Load Balance Weight:</span>
-                                    <span className="text-white">{backend.weight}</span>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        onClick={() => setEditingBackend(backend)}
+                                        variant="outline" 
+                                        className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                        Edit
+                                    </Button>
+                                    <Button 
+                                        onClick={() => handleDelete(backend._id)}
+                                        variant="destructive" 
+                                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete
+                                    </Button>
                                 </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white">
-                                    <Edit2 className="w-4 h-4" />
-                                    Edit
-                                </Button>
-                                <Button variant="destructive" className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400">
-                                    <Trash2 className="w-4 h-4" />
-                                    Delete
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
+
+            {/* Add/Edit Backend Modal */}
+            {(showAddModal || editingBackend) && (
+                <BackendModal
+                    backend={editingBackend}
+                    onClose={() => {
+                        setShowAddModal(false);
+                        setEditingBackend(null);
+                    }}
+                    onSubmit={editingBackend ? (data) => handleUpdate(editingBackend._id, data) : handleAdd}
+                />
+            )}
+        </div>
+    );
+}
+
+function BackendModal({ backend, onClose, onSubmit }) {
+    const [formData, setFormData] = useState({
+        name: backend?.name || '',
+        base_url: backend?.base_url || '',
+        health_endpoint: backend?.health_endpoint || '/health',
+        weight: backend?.weight || 1
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSubmit(formData);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-[#111111] border border-white/20 rounded-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-white">{backend ? 'Edit Backend' : 'Add New Backend'}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                        <XCircle className="w-5 h-5 text-gray-400" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name" className="text-gray-300">Name</Label>
+                        <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            required
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="base_url" className="text-gray-300">Base URL</Label>
+                        <Input
+                            id="base_url"
+                            value={formData.base_url}
+                            onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
+                            placeholder="http://localhost:3001"
+                            required
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="health_endpoint" className="text-gray-300">Health Endpoint</Label>
+                        <Input
+                            id="health_endpoint"
+                            value={formData.health_endpoint}
+                            onChange={(e) => setFormData({ ...formData, health_endpoint: e.target.value })}
+                            placeholder="/health"
+                            required
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="weight" className="text-gray-300">Load Balance Weight</Label>
+                        <Input
+                            id="weight"
+                            type="number"
+                            min="1"
+                            value={formData.weight}
+                            onChange={(e) => setFormData({ ...formData, weight: parseInt(e.target.value) })}
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                    <div className="flex gap-2 pt-4">
+                        <Button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                            {backend ? 'Update' : 'Create'}
+                        </Button>
+                        <Button type="button" onClick={onClose} variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white">
+                            Cancel
+                        </Button>
+                    </div>
+                </form>
             </div>
         </div>
     );
 }
 
-function SecurityTab({ apiKeys }) {
+function SecurityTab({ settings, onSave }) {
     const [copiedKey, setCopiedKey] = useState(null);
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (settings) {
+            setFormData(settings);
+        }
+    }, [settings]);
+
+    if (!settings) return null;
+
+    // Mock API keys for now (backend doesn't have this endpoint yet)
+    const apiKeys = [
+        { key: 'gk_live_abc123...', created: '2024-01-15', lastUsed: '2 hours ago' },
+        { key: 'gk_live_def456...', created: '2024-01-10', lastUsed: '5 minutes ago' },
+        { key: 'gk_test_xyz789...', created: '2024-01-05', lastUsed: 'Never' },
+    ];
     const [jwtExpiration, setJwtExpiration] = useState('1h');
     // const [sensitivity, setSensitivity] = useState('medium');
     const [mfaEnabled, setMfaEnabled] = useState(true);
@@ -893,7 +1162,17 @@ function SecurityTab({ apiKeys }) {
     );
 }
 
-function AlertsTab() {
+function AlertsTab({ settings, onSave }) {
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (settings) {
+            setFormData(settings);
+        }
+    }, [settings]);
+
+    if (!settings) return null;
+
     const alertRules = [
         { name: 'Circuit Breaker State Changes', enabled: true, threshold: null },
         { name: 'High Error Rate', enabled: true, threshold: 5 },
