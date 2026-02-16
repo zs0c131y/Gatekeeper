@@ -1,0 +1,11 @@
+# Audit: Conflicts Report
+
+This report documents direct conflicts found between the `AI-DOCS` (code-based) and `md-docs-for-ai` (SRS-based) sources.
+
+| Conflict Area | `AI-DOCS` (Code-based View) | `md-docs-for-ai` (SRS-based View) | Resolution and Reason |
+| :--- | :--- | :--- | :--- |
+| **Documentation Structure** | A flat list of modules and components. | A flat list of conceptual modules. | **Decision:** A new, hierarchical structure (`BACKEND/`, `FRONTEND/`) was created. **Reason:** The flat structures were inadequate and led to mixing frontend and backend concepts. The new structure provides better separation of concerns. |
+| **Module Definitions** | Modules are defined by individual files in the codebase (e.g., `analytics.js` is a module). | Modules are defined by function (e.g., "Rate Limiting" is a module). | **Decision:** Adopted the conceptual modules from the SRS as the primary module definitions, and mapped the implemented code files to them. **Reason:** The SRS provides a better architectural overview. The implemented files are details within that architecture. |
+| **Dashboard Updates** | The implemented dashboard pages fetch data via standard REST API calls. | The SRS explicitly states that dashboard updates "must occur via WebSocket." | **Decision:** Documented the implemented API polling mechanism but noted the WebSocket requirement as "Planned" in `STATUS/IMPLEMENTATION_STATUS.md`. **Reason:** The codebase represents the current truth. The SRS represents the target state. |
+| **Authentication** | No implementation of JWT or API Key authentication is documented. | The SRS specifies that the system "shall support JWT authentication" and "API keys." | **Decision:** Created a `MODULE_SECURITY.md` file based on the SRS but marked the features as "Planned" in the status report. **Reason:** This is a critical architectural requirement from the SRS that needs to be tracked, even if not yet implemented. |
+| **File Naming** | Inconsistent naming conventions (e.g., `BACKEND_ANALYTICS.md`, `UI_BUTTON.md`). | Consistent `MODULE_*.md` naming. | **Decision:** A new, consistent naming scheme was enforced: `MODULE_*` for backend, `PAGE_*` for frontend pages, and `COMPONENT_*` for UI components. **Reason:** Consistency improves readability and automated parsing. |
