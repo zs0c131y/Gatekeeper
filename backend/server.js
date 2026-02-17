@@ -1,21 +1,28 @@
 const express = require("express");
-const cors    = require("cors");
-require("dotenv").config({ path: "../.env" });
+require("dotenv").config();
 
+const { connectMongoDB, connectRedis } = require("./src/config/database");
+const { applySecurityMiddleware } = require("./src/middleware/security");
+const errorHandler = require("./src/middleware/errorHandler");
+const seed = require("./src/config/seed");
+
+// Existing routes
 const overviewRoutes  = require("./routes/overview");
 const analyticsRoutes = require("./routes/analytics");
 const logsRoutes      = require("./routes/logs");
 const settingsRoutes  = require("./routes/settings");
 
+// New auth routes
+const authRoutes   = require("./src/routes/auth");
+const apiKeyRoutes = require("./src/routes/apiKeys");
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ─────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ── Security Middleware ───────────────────────────────────────────────────
+applySecurityMiddleware(app);
 
-// ── Routes ─────────────────────────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────────────────────
 app.get("/", (_req, res) => res.json({ message: "Gatekeeper API is running", version: "1.0.0" }));
 app.get("/health", (_req, res) => res.json({ status: "ok", uptime: process.uptime() }));
 
@@ -24,49 +31,31 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/logs",      logsRoutes);
 app.use("/api/settings",  settingsRoutes);
 
+app.use("/api/auth",           authRoutes);
+app.use("/api/admin/api-keys", apiKeyRoutes);
+
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
-// ── Optional DB connections (non-blocking for demo) ───────────────────────
-async function tryConnectDatabases() {
-  if (!process.env.MONGO_URI) {
-    console.log("⚠️  MONGO_URI not set — running without MongoDB");
-    return;
-  }
-  try {
-    const { MongoClient } = require("mongodb");
-    const client = new MongoClient(process.env.MONGO_URI);
-    await client.connect();
-    console.log("✅ Connected to MongoDB");
-    app.locals.mongo = client;
-  } catch (err) {
-    console.warn("⚠️  MongoDB connection failed:", err.message);
-  }
+// ── Global Error Handler ──────────────────────────────────────────────────
+app.use(errorHandler);
 
-  if (!process.env.REDIS_HOST) return;
+// ── Start ─────────────────────────────────────────────────────────────────
+async function start() {
   try {
-    const { createClient } = require("redis");
-    const redis = createClient({
-      username: process.env.REDIS_USERNAME,
-      password: process.env.REDIS_PASSWORD,
-      socket: {
-        host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-      },
+    await connectMongoDB();
+    await connectRedis();
+    await seed();
+
+    app.listen(PORT, () => {
+      console.log(`Gatekeeper API running on http://localhost:${PORT}`);
     });
-    redis.on("error", (e) => console.warn("Redis error:", e.message));
-    await redis.connect();
-    console.log("✅ Connected to Redis");
-    app.locals.redis = redis;
   } catch (err) {
-    console.warn("⚠️  Redis connection failed:", err.message);
+    console.error("Failed to start server:", err.message);
+    process.exit(1);
   }
 }
 
-// ── Start ──────────────────────────────────────────────────────────────────
-app.listen(PORT, async () => {
-  console.log(`🚀 Gatekeeper API running on http://localhost:${PORT}`);
-  await tryConnectDatabases();
-});
+start();
 
 module.exports = app;

@@ -27,6 +27,15 @@ The server validates all incoming data. Invalid data will result in a `400 Bad R
 | `GET` | `/overview` | Retrieves aggregated data for the main dashboard. |
 | `GET` | `/settings` | Retrieves the current system settings. |
 | `POST` | `/settings` | Updates the system settings. |
+| `POST` | `/auth/login` | Login with email + password, returns access + refresh tokens. |
+| `POST` | `/auth/refresh` | Refresh access token using refresh token. |
+| `POST` | `/auth/logout` | Blacklist current token and delete refresh token. Requires JWT. |
+| `GET` | `/auth/me` | Get current authenticated user profile. Requires JWT. |
+| `POST` | `/auth/change-password` | Change password with strength validation. Requires JWT. |
+| `GET` | `/admin/api-keys` | List all API keys (hashes not exposed). Requires JWT + Admin. |
+| `POST` | `/admin/api-keys` | Create new API key (raw key returned once). Requires JWT + Admin. |
+| `PATCH` | `/admin/api-keys/:id/revoke` | Revoke an API key. Requires JWT + Admin. |
+| `DELETE` | `/admin/api-keys/:id` | Permanently delete an API key. Requires JWT + Admin. |
 
 ## 6. Performance Notes
 
