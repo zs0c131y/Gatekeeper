@@ -34,6 +34,39 @@ const validateChangePassword = [
 ];
 
 /**
+ * Validation rules for register endpoint.
+ */
+const validateRegister = [
+  body('username')
+    .notEmpty()
+    .withMessage('Username is required')
+    .isLength({ min: 3, max: 30 })
+    .withMessage('Username must be between 3 and 30 characters')
+    .matches(/^[a-zA-Z0-9_]+$/)
+    .withMessage('Username can only contain letters, numbers, and underscores')
+    .trim(),
+  body('email')
+    .isEmail()
+    .withMessage('Valid email is required')
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters')
+    .matches(/[A-Z]/)
+    .withMessage('Password must contain an uppercase letter')
+    .matches(/[a-z]/)
+    .withMessage('Password must contain a lowercase letter')
+    .matches(/[0-9]/)
+    .withMessage('Password must contain a number')
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage('Password must contain a special character'),
+  body('role')
+    .optional()
+    .isIn(['admin', 'viewer'])
+    .withMessage('Role must be admin or viewer'),
+];
+
+/**
  * Validation rules for creating an API key.
  */
 const validateCreateApiKey = [
@@ -76,6 +109,7 @@ function handleValidationErrors(req, res, next) {
 
 module.exports = {
   validateLogin,
+  validateRegister,
   validateChangePassword,
   validateCreateApiKey,
   handleValidationErrors,

@@ -12,9 +12,10 @@ const {
 } = require('../utils/jwt');
 const redisKeys = require('../config/redisKeys');
 const { getRedisClient } = require('../config/database');
-const { requireJWT } = require('../middleware/auth');
+const { requireJWT, requireRole } = require('../middleware/auth');
 const {
   validateLogin,
+  validateRegister,
   validateChangePassword,
   handleValidationErrors,
 } = require('../middleware/validate');
@@ -24,6 +25,40 @@ const {
  * @param {Function} fn - Async route handler.
  */
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// POST /api/auth/register  (admin only)
+router.post(
+  '/register',
+  requireJWT,
+  requireRole('admin'),
+  validateRegister,
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const { username, email, password, role = 'viewer' } = req.body;
+
+    const existing = await User.findOne({ $or: [{ email }, { username }] });
+    if (existing) {
+      const field = existing.email === email ? 'email' : 'username';
+      return res.status(409).json({
+        error: `A user with that ${field} already exists`,
+        code: 'USER_EXISTS',
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const user = await User.create({ username, email, passwordHash, role });
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  })
+);
 
 // POST /api/auth/login
 router.post(
