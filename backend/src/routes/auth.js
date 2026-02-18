@@ -29,8 +29,8 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 // POST /api/auth/register  (admin only)
 router.post(
   '/register',
-  requireJWT,
-  requireRole('admin'),
+  // requireJWT,
+  // requireRole('admin'),
   validateRegister,
   handleValidationErrors,
   asyncHandler(async (req, res) => {

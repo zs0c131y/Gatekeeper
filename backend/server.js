@@ -22,6 +22,14 @@ const PORT = process.env.PORT || 3000;
 // ── Security Middleware ───────────────────────────────────────────────────
 applySecurityMiddleware(app);
 
+// DEBUG: Log request body to debug validation errors
+app.use((req, res, next) => {
+  console.log(`[${req.method} ${req.url}]`);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  next();
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────
 app.get("/", (_req, res) =>
   res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
