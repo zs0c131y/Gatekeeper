@@ -10,4 +10,4 @@ COPY backend/ .
 
 EXPOSE 9000
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "npm install && npm run dev"]
