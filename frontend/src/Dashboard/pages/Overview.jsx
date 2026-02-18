@@ -12,7 +12,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 
 function MetricCard({ title, value, change, trend, icon: Icon, color }) {
     const isPositive = change && parseFloat(change) > 0;
-    
+
     return (
         <Card className="bg-[#111111] border-white/10 hover:border-amber-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10">
             <CardContent className="p-6">
@@ -45,23 +45,23 @@ function MetricCard({ title, value, change, trend, icon: Icon, color }) {
                         )} />
                     </div>
                 </div>
-            
-            {change && (
-                <div className="flex items-center gap-2">
-                    {isPositive ? (
-                        <TrendingUp className="w-4 h-4 text-green-400" />
-                    ) : (
-                        <TrendingDown className="w-4 h-4 text-red-400" />
-                    )}
-                    <span className={cn(
-                        "text-sm font-medium",
-                        isPositive ? 'text-green-400' : 'text-red-400'
-                    )}>
-                        {change}
-                    </span>
-                    <span className="text-gray-500 text-xs">{trend}</span>
-                </div>
-            )}
+
+                {change && (
+                    <div className="flex items-center gap-2">
+                        {isPositive ? (
+                            <TrendingUp className="w-4 h-4 text-green-400" />
+                        ) : (
+                            <TrendingDown className="w-4 h-4 text-red-400" />
+                        )}
+                        <span className={cn(
+                            "text-sm font-medium",
+                            isPositive ? 'text-green-400' : 'text-red-400'
+                        )}>
+                            {change}
+                        </span>
+                        <span className="text-gray-500 text-xs">{trend}</span>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -74,7 +74,7 @@ export function Overview() {
     // Auto-refresh every 30 seconds
     useEffect(() => {
         if (isPaused) return;
-        
+
         const interval = setInterval(() => {
             refetch();
         }, 30000);
@@ -120,18 +120,6 @@ export function Overview() {
     if (!overviewData) {
         return <EmptyState message="No overview data available" />;
     }
-
-    const getLatencyColor = (latency) => {
-        if (latency < 50) return 'text-green-400';
-        if (latency < 100) return 'text-amber-400';
-        return 'text-red-400';
-    };
-
-    const getErrorRateColor = (rate) => {
-        if (rate < 1) return 'text-green-400';
-        if (rate < 2) return 'text-amber-400';
-        return 'text-red-400';
-    };
 
     return (
         <div className="space-y-6">
@@ -197,52 +185,52 @@ export function Overview() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                {overviewData.trafficData && overviewData.trafficData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={overviewData.trafficData}>
-                            <defs>
-                                <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                            <XAxis 
-                                dataKey="timestamp" 
-                                stroke="#666" 
-                                tick={{ fill: '#666' }}
-                                tickFormatter={(value) => {
-                                    const date = new Date(value);
-                                    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-                                }}
-                            />
-                            <YAxis 
-                                stroke="#666" 
-                                tick={{ fill: '#666' }}
-                                label={{ value: 'Requests', angle: -90, position: 'insideLeft', fill: '#666' }}
-                            />
-                            <Tooltip 
-                                contentStyle={{ 
-                                    backgroundColor: '#1a1a1a', 
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    borderRadius: '8px'
-                                }}
-                                labelStyle={{ color: '#999' }}
-                                labelFormatter={(value) => new Date(value).toLocaleString()}
-                            />
-                            <Area 
-                                type="monotone" 
-                                dataKey="requests" 
-                                stroke="#f59e0b" 
-                                strokeWidth={2}
-                                fillOpacity={1} 
-                                fill="url(#colorRequests)" 
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <EmptyState message="No traffic data available" icon="inbox" />
-                )}
+                    {overviewData.trafficData && overviewData.trafficData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <AreaChart data={overviewData.trafficData}>
+                                <defs>
+                                    <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="timestamp"
+                                    stroke="#666"
+                                    tick={{ fill: '#666' }}
+                                    tickFormatter={(value) => {
+                                        const date = new Date(value);
+                                        return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                                    }}
+                                />
+                                <YAxis
+                                    stroke="#666"
+                                    tick={{ fill: '#666' }}
+                                    label={{ value: 'Requests', angle: -90, position: 'insideLeft', fill: '#666' }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1a1a1a',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '8px'
+                                    }}
+                                    labelStyle={{ color: '#999' }}
+                                    labelFormatter={(value) => new Date(value).toLocaleString()}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="requests"
+                                    stroke="#f59e0b"
+                                    strokeWidth={2}
+                                    fillOpacity={1}
+                                    fill="url(#colorRequests)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <EmptyState message="No traffic data available" icon="inbox" />
+                    )}
                 </CardContent>
             </Card>
 
@@ -267,7 +255,7 @@ export function Overview() {
                                     </thead>
                                     <tbody>
                                         {overviewData.topEndpoints.map((endpoint, index) => (
-                                            <tr 
+                                            <tr
                                                 key={index}
                                                 className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
                                             >
