@@ -16,12 +16,12 @@ This document tracks outstanding tasks required to complete the master documenta
 
 ## Missing Schemas
 
-*   **`Configs` Collection:** The detailed schema is not available.
-*   **`Backends` Collection:** The detailed schema is not available.
-*   **`Routes` Collection:** The detailed schema is not available.
-*   **`Analytics` Collection:** The detailed schema for aggregated metrics is not available.
-*   **`ClientProfiles` Collection:** The detailed schema is not available.
-*   **`ApiKeys` Collection:** The detailed schema is not available.
+*   ~~**`Configs` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
+*   ~~**`Backends` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
+*   ~~**`Routes` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
+*   ~~**`Analytics` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
+*   ~~**`ClientProfiles` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
+*   ~~**`ApiKeys` Collection:**~~ Resolved — see `DATA_STRUCTURES/OVERVIEW.md`.
 
 ## Missing Flows
 
@@ -32,3 +32,8 @@ This document tracks outstanding tasks required to complete the master documenta
 
 *   **`gatewayOverhead` Metric:** Clarification is needed on how this value is calculated.
 *   **Production Deployment:** The `docker-compose-prod.yml` file implies a production setup, but detailed documentation on networking, volume mapping, and secret management is missing.
+
+## Resolved
+
+*   ~~**Synthetic Data Seeder:**~~ Resolved — see `BACKEND/MODULE_SEEDER.md` and `scripts/seedSyntheticData.js`.
+
