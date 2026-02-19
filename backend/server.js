@@ -16,6 +16,10 @@ const settingsRoutes = require("./routes/settings");
 const authRoutes = require("./src/routes/auth");
 const apiKeyRoutes = require("./src/routes/apiKeys");
 
+// Gateway
+const gatewayRoutes = require("./src/routes/gateway");
+const { startHealthCheckLoop } = require("./src/services/healthCheck");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -38,6 +42,9 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin/api-keys", apiKeyRoutes);
 
+// Gateway — catch-all proxy (must come after all /api/* routes)
+app.use("/gateway", gatewayRoutes);
+
 // 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
@@ -48,8 +55,9 @@ app.use(errorHandler);
 async function start() {
   try {
     await connectMongoDB();
-    await connectRedis(); // Optional - server continues if Redis is unavailable
+    await connectRedis();
     await seed();
+    await startHealthCheckLoop();
 
     app.listen(PORT, () => {
       console.log(`Gatekeeper API running on http://localhost:${PORT}`);

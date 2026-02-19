@@ -1,72 +1,156 @@
+/**
+ * /api/overview — real-data implementation.
+ */
 const { Router } = require("express");
-const data = require("../data/mockData");
+const Log = require("../src/models/Log");
+const Backend = require("../src/models/Backend");
+const Alert = require("../src/models/Alert");
+const { getRedisClient } = require("../src/config/database");
+const redisKeys = require("../src/config/redisKeys");
+const { scoreToStatus } = require("../src/services/healthCheck");
 
 const router = Router();
 
-// GET /api/overview  — aggregated snapshot for the dashboard
-router.get("/", (_req, res) => {
-  const recentLogs = data.getLogs({ limit: 100 }).logs;
-  const errors = recentLogs.filter((l) => l.status >= 400).length;
-  const avgLatency = recentLogs.length
-    ? Math.round(
-        recentLogs.reduce((s, l) => s + l.latency, 0) / recentLogs.length,
-      )
-    : 0;
-  const errorRate = recentLogs.length
-    ? parseFloat(((errors / recentLogs.length) * 100).toFixed(1))
-    : 0;
+async function getCircuitStateRaw(redis, name) {
+  if (!redis) return "CLOSED";
+  return (await redis.get(redisKeys.circuitState(name))) || "CLOSED";
+}
+async function getHealthScoreRaw(redis, name) {
+  if (!redis) return null;
+  const v = await redis.get(redisKeys.healthScore(name));
+  return v === null ? null : parseInt(v, 10);
+}
 
-  const backends = data.getBackends().map((b) => {
-    const cb = data.getCircuitBreakers().find((c) => c.name === b.name) || {};
-    return {
-      name: b.name,
-      status: b.status,
-      circuitState: cb.state || "CLOSED",
-      healthScore: cb.health ?? 100,
-    };
-  });
+// GET /api/overview
+router.get("/", async (_req, res, next) => {
+  try {
+    const redis = getRedisClient();
+    const recentLogs = await Log.find()
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .lean();
 
-  const activeBackends = backends.filter((b) => b.status === "healthy").length;
+    const errors = recentLogs.filter((l) => l.status >= 400).length;
+    const avgLatency = recentLogs.length
+      ? Math.round(
+          recentLogs.reduce((s, l) => s + l.latency, 0) / recentLogs.length,
+        )
+      : 0;
+    const errorRate = recentLogs.length
+      ? parseFloat(((errors / recentLogs.length) * 100).toFixed(1))
+      : 0;
 
-  const trafficData = data.getLiveTraffic(30).map((p, i) => ({
-    timestamp: Date.now() - (30 - i) * 1000,
-    requests: p.requests,
-  }));
+    const dbBackends = await Backend.find({ isActive: true }).lean();
+    const backends = await Promise.all(
+      dbBackends.map(async (b) => {
+        const score = await getHealthScoreRaw(redis, b.name);
+        const circuitState = await getCircuitStateRaw(redis, b.name);
+        return {
+          name: b.name,
+          status: scoreToStatus(score),
+          circuitState,
+          healthScore: score ?? 100,
+        };
+      }),
+    );
+    const activeBackends = backends.filter(
+      (b) => b.status === "healthy",
+    ).length;
 
-  const topEndpoints = data
-    .getTopEndpoints()
-    .slice(0, 10)
-    .map((ep) => ({
-      endpoint: ep.endpoint,
-      requests: ep.requests,
-      avgLatency: ep.latency,
-      errorRate: ep.errorRate,
-    }));
+    const trafficData = recentLogs
+      .slice(0, 30)
+      .reverse()
+      .map((l) => ({
+        timestamp: new Date(l.timestamp).getTime(),
+        requests: 1,
+      }));
 
-  res.json({
-    totalRequests: recentLogs.length,
-    avgLatency,
-    errorRate,
-    activeBackends,
-    backends,
-    trafficData,
-    topEndpoints,
-  });
+    const epMap = {};
+    for (const log of recentLogs) {
+      const ep = log.endpoint;
+      if (!epMap[ep])
+        epMap[ep] = { endpoint: ep, count: 0, lSum: 0, errors: 0 };
+      epMap[ep].count++;
+      epMap[ep].lSum += log.latency || 0;
+      if (log.status >= 400) epMap[ep].errors++;
+    }
+    const topEndpoints = Object.values(epMap)
+      .map((e) => ({
+        endpoint: e.endpoint,
+        requests: e.count,
+        avgLatency: Math.round(e.lSum / e.count),
+        errorRate: parseFloat(((e.errors / e.count) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => b.requests - a.requests)
+      .slice(0, 10);
+
+    res.json({
+      totalRequests: recentLogs.length,
+      avgLatency,
+      errorRate,
+      activeBackends,
+      backends,
+      trafficData,
+      topEndpoints,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/overview/metrics
-router.get("/metrics", (_req, res) => {
-  res.json(data.getMetrics());
+router.get("/metrics", async (_req, res, next) => {
+  try {
+    const redis = getRedisClient();
+    const cached = redis ? await redis.get(redisKeys.overviewCache()) : null;
+    if (cached) return res.json(JSON.parse(cached));
+    const recentLogs = await Log.find()
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .lean();
+    const dbBackends = await Backend.find({ isActive: true }).lean();
+    const errors = recentLogs.filter((l) => l.status >= 400).length;
+    const avgLatency = recentLogs.length
+      ? Math.round(
+          recentLogs.reduce((s, l) => s + l.latency, 0) / recentLogs.length,
+        )
+      : 0;
+    const metrics = {
+      totalRequests: { value: recentLogs.length, change: 0 },
+      avgLatency: { value: `${avgLatency}ms`, change: 0 },
+      errorRate: {
+        value: `${((errors / (recentLogs.length || 1)) * 100).toFixed(1)}%`,
+        change: 0,
+      },
+      activeBackends: {
+        value: `${dbBackends.length}/${dbBackends.length}`,
+        change: 0,
+      },
+    };
+    if (redis)
+      await redis.setex(redisKeys.overviewCache(), 10, JSON.stringify(metrics));
+    res.json(metrics);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/overview/traffic?seconds=60
-router.get("/traffic", (req, res) => {
-  const seconds = Math.min(parseInt(req.query.seconds) || 60, 300);
-  res.json(data.getLiveTraffic(seconds));
+router.get("/traffic", async (req, res, next) => {
+  try {
+    const seconds = Math.min(parseInt(req.query.seconds) || 60, 300);
+    const since = new Date(Date.now() - seconds * 1000);
+    const logs = await Log.find({ timestamp: { $gte: since } })
+      .sort({ timestamp: 1 })
+      .lean();
+    res.json(logs.map((l, i) => ({ time: i, requests: 1 })));
+  } catch (err) {
+    next(err);
+  }
 });
 
-// GET /api/overview/traffic/stream  — Server-Sent Events for live traffic
-router.get("/traffic/stream", (req, res) => {
+// GET /api/overview/traffic/stream — SSE
+router.get("/traffic/stream", (_req, res) => {
   res.set({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -74,43 +158,121 @@ router.get("/traffic/stream", (req, res) => {
     "X-Accel-Buffering": "no",
   });
   res.flushHeaders();
-
-  const send = () => {
-    const point = data.getLiveTrafficPoint();
-    res.write(`data: ${JSON.stringify(point)}\n\n`);
+  const send = async () => {
+    try {
+      const count = await Log.countDocuments({
+        timestamp: { $gte: new Date(Date.now() - 1000) },
+      });
+      res.write(
+        `data: ${JSON.stringify({ time: Date.now(), requests: count })}\n\n`,
+      );
+    } catch {
+      /* swallow */
+    }
   };
-
-  send(); // initial point
   const interval = setInterval(send, 1000);
-
-  req.on("close", () => clearInterval(interval));
+  res.on("close", () => clearInterval(interval));
 });
 
 // GET /api/overview/endpoints
-router.get("/endpoints", (_req, res) => {
-  res.json(data.getTopEndpoints());
+router.get("/endpoints", async (_req, res, next) => {
+  try {
+    const logs = await Log.find().sort({ timestamp: -1 }).limit(500).lean();
+    const map = {};
+    for (const l of logs) {
+      if (!map[l.endpoint])
+        map[l.endpoint] = {
+          endpoint: l.endpoint,
+          requests: 0,
+          lSum: 0,
+          errors: 0,
+        };
+      map[l.endpoint].requests++;
+      map[l.endpoint].lSum += l.latency || 0;
+      if (l.status >= 400) map[l.endpoint].errors++;
+    }
+    res.json(
+      Object.values(map)
+        .map((e) => ({
+          endpoint: e.endpoint,
+          requests: e.requests,
+          latency: Math.round(e.lSum / e.requests),
+          errorRate: parseFloat(((e.errors / e.requests) * 100).toFixed(1)),
+        }))
+        .sort((a, b) => b.requests - a.requests),
+    );
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/overview/circuit-breakers
-router.get("/circuit-breakers", (_req, res) => {
-  res.json(data.getCircuitBreakers());
+router.get("/circuit-breakers", async (_req, res, next) => {
+  try {
+    const redis = getRedisClient();
+    const backends = await Backend.find({ isActive: true }).lean();
+    const result = await Promise.all(
+      backends.map(async (b) => {
+        const state = await getCircuitStateRaw(redis, b.name);
+        const score = await getHealthScoreRaw(redis, b.name);
+        return { name: b.name, state, health: score ?? 100, lastChange: "N/A" };
+      }),
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /api/overview/circuit-breakers/:name/trip
-router.post("/circuit-breakers/:name/trip", (req, res) => {
-  data.manuallyTripCircuitBreaker(req.params.name);
-  res.json({ success: true });
+router.post("/circuit-breakers/:name/trip", async (req, res, next) => {
+  try {
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.set(redisKeys.circuitState(req.params.name), "OPEN");
+      await redis.set(
+        redisKeys.circuitLastFailure(req.params.name),
+        String(Date.now()),
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /api/overview/circuit-breakers/:name/reset
-router.post("/circuit-breakers/:name/reset", (req, res) => {
-  data.resetCircuitBreaker(req.params.name);
-  res.json({ success: true });
+router.post("/circuit-breakers/:name/reset", async (req, res, next) => {
+  try {
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.set(redisKeys.circuitState(req.params.name), "CLOSED");
+      await redis.del(redisKeys.circuitFailureCount(req.params.name));
+      await redis.del(redisKeys.circuitLastFailure(req.params.name));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/overview/alerts
-router.get("/alerts", (_req, res) => {
-  res.json(data.getAlerts());
+router.get("/alerts", async (_req, res, next) => {
+  try {
+    const alerts = await Alert.find().sort({ createdAt: -1 }).limit(20).lean();
+    res.json(
+      alerts.map((a, i) => ({
+        id: a._id,
+        time: i === 0 ? "just now" : `${i * 2}m ago`,
+        type: a.type,
+        message: a.message,
+        timestamp: a.createdAt,
+        isRead: a.isRead,
+      })),
+    );
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

@@ -90,11 +90,10 @@ async function connectMongoDB() {
 async function connectRedis() {
   const url = process.env.REDIS_URL;
   if (!url) {
-    console.warn("REDIS_URL not set - Redis disabled");
-    return null;
+    throw new Error("REDIS_URL environment variable is not set");
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     redisClient = new Redis(url, {
       connectTimeout: 5000,
       maxRetriesPerRequest: 0,
@@ -104,24 +103,21 @@ async function connectRedis() {
 
     redisClient.on("connect", () => {
       console.log("Connected to Redis");
-      resolve(redisClient);
     });
 
     redisClient.on("error", () => {
-      // Suppress repeated errors - logged once on connect failure
+      // Suppress repeated errors - handled via connect() rejection
     });
 
-    // Attempt connection with timeout fallback
     redisClient
       .connect()
       .then(() => {
         resolve(redisClient);
       })
       .catch((err) => {
-        console.warn("Redis unavailable:", err.message);
-        console.warn("Server will continue without Redis caching");
+        console.error("Redis connection failed:", err.message);
         redisClient = null;
-        resolve(null);
+        reject(err);
       });
   });
 }

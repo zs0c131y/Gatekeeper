@@ -1,30 +1,13 @@
+/**
+ * /api/logs — real-data implementation.
+ */
 const { Router } = require("express");
-const data = require("../data/mockData");
+const Log = require("../src/models/Log");
 
 const router = Router();
 
-// GET /api/logs?page=1&limit=25&method=GET&status=4xx&search=trace-abc&clientIp=192
-router.get("/", (req, res) => {
-  const { page, limit, method, status, search, clientIp } = req.query;
-  const result = data.getLogs({
-    page:     parseInt(page)  || 1,
-    limit:    Math.min(parseInt(limit) || 25, 100),
-    method,
-    status,
-    search,
-    clientIp,
-  });
-  res.json(result);
-});
-
-// GET /api/logs/:id
-router.get("/:id", (req, res) => {
-  const log = data.getLogById(req.params.id);
-  if (!log) return res.status(404).json({ error: "Log entry not found" });
-  res.json(log);
-});
-
-// GET /api/logs/stream  — SSE for real-time log tailing
+// SSE route must be registered BEFORE /:id to avoid being shadowed
+// GET /api/logs/stream/live — SSE for real-time log tailing
 router.get("/stream/live", (req, res) => {
   res.set({
     "Content-Type": "text/event-stream",
@@ -34,23 +17,79 @@ router.get("/stream/live", (req, res) => {
   });
   res.flushHeaders();
 
-  let lastId = 0;
+  let lastTimestamp = new Date();
 
-  const send = () => {
-    const { logs: recent } = data.getLogs({ page: 1, limit: 10 });
-    const newEntries = recent.filter((l) => l.id > lastId);
-    newEntries.reverse().forEach((l) => {
-      res.write(`data: ${JSON.stringify(l)}\n\n`);
-      lastId = Math.max(lastId, l.id);
-    });
+  const send = async () => {
+    try {
+      const newLogs = await Log.find({ timestamp: { $gt: lastTimestamp } })
+        .sort({ timestamp: 1 })
+        .limit(10)
+        .lean();
+      for (const l of newLogs) {
+        res.write(`data: ${JSON.stringify(l)}\n\n`);
+        if (new Date(l.timestamp) > lastTimestamp)
+          lastTimestamp = new Date(l.timestamp);
+      }
+    } catch {
+      /* connection may have closed */
+    }
   };
-
-  // Set lastId to current newest
-  const { logs: init } = data.getLogs({ page: 1, limit: 1 });
-  if (init.length) lastId = init[0].id;
 
   const interval = setInterval(send, 1000);
   req.on("close", () => clearInterval(interval));
+});
+
+// GET /api/logs?page=1&limit=25&method=GET&status=4xx&search=trace-abc&clientIp=192
+router.get("/", async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
+    const { method, status, search, clientIp } = req.query;
+
+    const filter = {};
+    if (method) filter.method = method.toUpperCase();
+    if (clientIp) filter.clientIp = { $regex: clientIp };
+    if (search) filter.traceId = { $regex: search, $options: "i" };
+    if (status) {
+      const code = parseInt(status);
+      if (!isNaN(code)) {
+        filter.status = code;
+      } else {
+        const prefix = parseInt(status.charAt(0));
+        filter.status = { $gte: prefix * 100, $lt: (prefix + 1) * 100 };
+      }
+    }
+
+    const [logs, total] = await Promise.all([
+      Log.find(filter)
+        .sort({ timestamp: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Log.countDocuments(filter),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/logs/:traceId
+router.get("/:traceId", async (req, res, next) => {
+  try {
+    const log = await Log.findOne({ traceId: req.params.traceId }).lean();
+    if (!log) return res.status(404).json({ error: "Log entry not found" });
+    res.json(log);
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;
