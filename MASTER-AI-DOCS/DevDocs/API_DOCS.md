@@ -6,21 +6,23 @@ This document provides a comprehensive overview of the available API endpoints f
 The API is served at `/api`.
 
 ## Route Categories
-The application currently serves two categories of routes:
-1. **Core Features (Mock Data)**: Routes powered by `mockData.js`, primarily for frontend prototyping and visualization.
-2. **Authentication & Admin (Real Data)**: Routes powered by MongoDB and Redis, handling user authentication and API key management.
+The application currently serves two distinct categories of routes:
+
+1.  **Production / Real Routes (MongoDB + Redis)**: Fully functional endpoints for authentication and API key management.
+2.  **Prototype / Mock Routes (In-Memory)**: Simulation endpoints for the dashboard features (Overview, Analytics, Logs, Settings) backed by `mockData.js`.
 
 ---
 
-## 1. Authentication & Admin Routes (Real Data)
+## 1. Production Routes (Real Data)
 
-These routes interact with the database and require authentication/authorization where specified.
+These routes interact with the MongoDB database and Redis cache. They require proper authentication headers.
 
 ### Authentication
 **Base Path:** `/api/auth`
 
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :--- |
+| `POST` | `/register` | Register a new user (Admin only). | Yes (Admin) |
 | `POST` | `/login` | Authenticate user and receive access/refresh tokens. | No |
 | `POST` | `/refresh` | Refresh an expired access token using a refresh token. | No |
 | `POST` | `/logout` | Invalidate the current session (blacklists access token, removes refresh token). | Yes (JWT) |
@@ -28,6 +30,16 @@ These routes interact with the database and require authentication/authorization
 | `POST` | `/change-password` | Change the password for the current user. | Yes (JWT) |
 
 #### Request Bodies
+
+**POST /register**
+```json
+{
+  "username": "newadmin",
+  "email": "admin@gateway.local",
+  "password": "StrongPassword123!",
+  "role": "admin" // or "viewer"
+}
+```
 
 **POST /login**
 ```json
@@ -53,14 +65,14 @@ These routes interact with the database and require authentication/authorization
 ```
 *Note: New password must be at least 8 chars, contain uppercase, lowercase, number, and special char.*
 
-### API Keys (Admin)
+### API Key Management (Admin)
 **Base Path:** `/api/admin/api-keys`
-**Requirement:** All routes require a valid JWT and `admin` role.
+**Requirement:** All routes require a valid JWT via `Authorization: Bearer <token>` header AND the user must have the `admin` role.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | List all registered API keys. |
-| `POST` | `/` | Create a new API key. Returns the raw key only once. |
+| `GET` | `/` | List all registered API keys (metadata only, no raw keys). |
+| `POST` | `/` | Create a new API key. Returns the raw key **once**. |
 | `PATCH` | `/:id/revoke` | Revoke an existing API key (sets `isActive` to false). |
 | `DELETE` | `/:id` | Permanently delete an API key. |
 
@@ -72,148 +84,79 @@ These routes interact with the database and require authentication/authorization
   "name": "Service A Key",
   "clientId": "service-a",
   "scopes": ["read:users", "write:logs"],    // Optional
-  "rateLimit": 1000,                         // Optional
-  "expiresAt": "2024-12-31T23:59:59Z"        // Optional
+  "rateLimit": 1000,                         // Optional (Global default used if omitted)
+  "expiresAt": "2024-12-31T23:59:59Z"        // Optional (No expiry if omitted)
 }
 ```
 
+**PATCH /:id/revoke**
+*   No body required.
+*   Action: Sets `isActive: false` in the database.
+
 ---
 
-## 2. Core Feature Routes (Mock Data)
+## 2. Prototype Routes (Mock Data)
 
-These routes currently return simulated data for the dashboard features.
+These routes simulate a fully populated API Gateway dashboard. They do **not** persist data to the database and reset on server restart.
 
-### Overview
+### Overview Dashboard
 **Base Path:** `/api/overview`
 
-| Method | Endpoint | Query Params | Description |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/metrics` | - | General system metrics (requests, errors, latency, etc.). |
-| `GET` | `/traffic` | `seconds` (default: 60) | Traffic volume data for the last N seconds. |
-| `GET` | `/traffic/stream` | - | Server-Sent Events (SSE) stream for real-time traffic updates. |
-| `GET` | `/endpoints` | - | Top accessed endpoints. |
-| `GET` | `/circuit-breakers` | - | Status of all circuit breakers. |
-| `POST` | `/circuit-breakers/:name/trip` | - | Manually open (trip) a specific circuit breaker. |
-| `POST` | `/circuit-breakers/:name/reset` | - | Reset a circuit breaker (close it). |
-| `GET` | `/alerts` | - | Recent system alerts. |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Aggregated snapshot for the dashboard (metrics, traffic, top endpoints). |
+| `GET` | `/metrics` | General system metrics (requests, errors, latency, etc.). |
+| `GET` | `/traffic` | Traffic volume data for the last N seconds (default 60). |
+| `GET` | `/traffic/stream` | Server-Sent Events (SSE) stream for real-time traffic updates. |
+| `GET` | `/endpoints` | Top accessed endpoints based on mock usage. |
+| `GET` | `/circuit-breakers` | Status of all simulated circuit breakers. |
+| `POST` | `/circuit-breakers/:name/trip` | Manually open (trip) a specific circuit breaker. |
+| `POST` | `/circuit-breakers/:name/reset` | Reset a circuit breaker (close it). |
+| `GET` | `/alerts` | Recent simulated system alerts. |
 
-*(No specific request bodies required for Overview POST routes, they act on the URL parameter :name)*
-
-### Analytics
+### Analytics Dashboard
 **Base Path:** `/api/analytics`
 
-| Method | Endpoint | Query Params | Description |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/traffic` | `hours` (default: 24) | Traffic data points for the specified duration. |
-| `GET` | `/latency-distribution` | - | Distribution of request latencies. |
-| `GET` | `/errors` | - | Error breakdown by type and timeline. |
-| `GET` | `/endpoints` | - | Comprehensive performance metrics per endpoint. |
-| `GET` | `/clients` | - | Activity metrics by client. |
-| `GET` | `/summary` | `hours` | specific aggregation of all analytics data in one call. |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/summary` | Aggregated analytics data for charts (traffic, latency, errors). |
+| `GET` | `/traffic` | Traffic data points (mocked). |
+| `GET` | `/latency-distribution` | Distribution of request latencies. |
+| `GET` | `/errors` | Error breakdown by type and timeline. |
+| `GET` | `/endpoints` | Comprehensive performance metrics per endpoint. |
+| `GET` | `/clients` | Simulated client activity metrics. |
 
-### Logs
+### Logs Explorer
 **Base Path:** `/api/logs`
 
 | Method | Endpoint | Query Params | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/` | `page`, `limit`, `method`, `status`, `search`, `clientIp` | Search and filter system logs. |
+| `GET` | `/` | `page`, `limit`, `status`, `search` | Search and filter mock logs. |
 | `GET` | `/:id` | - | Get details of a specific log entry. |
 | `GET` | `/stream/live` | - | SSE stream for real-time log tailing. |
 
-### Settings
+### System Settings (Mock Configuration)
 **Base Path:** `/api/settings`
+> **Note:** These settings modify in-memory variables only. They illustrate the configuration UI flow but do not affect the actual server behavior (except within the mock data logic itself).
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Get all settings configurations. |
-| `GET/PUT` | `/general` | Manage general application settings. |
-| `GET/PUT` | `/rate-limiting` | Manage global rate limiting rules. |
-| `GET/PUT` | `/circuit-breakers` | Configure circuit breaker thresholds. |
-| `GET` | `/backends` | List configured backend services. |
-| `POST` | `/backends` | Add a new backend service. |
-| `PUT` | `/backends/:name` | Update an existing backend service. |
-| `DELETE` | `/backends/:name` | Remove a backend service. |
-| `GET/PUT` | `/security` | Manage security polices. |
-| `GET/PUT` | `/alerts` | Configure alerting rules. |
-| `GET` | `/api-keys` | List API keys (Mock implementation). |
-| `POST` | `/api-keys` | Generate a new API key (Mock implementation). |
-| `DELETE` | `/api-keys/:id` | Revoke an API key (Mock implementation). |
+| `GET/PUT` | `/general` | Manage general application settings (mock). |
+| `GET/PUT` | `/rate-limiting` | Manage rate limiting rules (mock object). |
+| `GET/PUT` | `/circuit-breakers` | Configure circuit breaker thresholds (mock). |
+| `GET/POST`| `/backends` | CRUD for backend services (mock list). |
+| `PUT/DELETE`| `/backends/:name` | Update/Remove a backend service from the mock list. |
+| `GET/PUT` | `/security` | Manage security policies (mock). |
+| `GET/PUT` | `/alerts` | Configure alerting rules (mock). |
+| `GET` | `/api-keys` | **[Mock]** List simulated API keys for dashboard UI demo. |
+| `POST` | `/api-keys` | **[Mock]** Generate a simulated API key. |
+| `DELETE` | `/api-keys/:id` | **[Mock]** Revoke a simulated API key. |
 
-#### Request Bodies
+---
 
-**PUT /general**
-```json
-{
-  "gatewayName": "Gatekeeper API Gateway",
-  "loggingLevel": "debug",
-  "logRetentionDays": 60,
-  "adaptiveRateLimiting": true,
-  "circuitBreaking": true,
-  "realtimeAnalytics": true
-}
-```
+## 3. Discrepancy Note
 
-**PUT /rate-limiting**
-```json
-{
-  "global": { 
-    "requestsPerMinute": 2000, 
-    "burstAllowance": 150 
-  },
-  "adaptive": { 
-    "enabled": true, 
-    "sensitivity": "High", 
-    "minLimit": 50, 
-    "maxLimit": 5000 
-  }
-}
-```
+You will notice two sets of API Key routes:
+1.  `/api/admin/api-keys` (Real, MongoDB-backed) — Use this for actual gateway security.
+2.  `/api/settings/api-keys` (Mock, Memory-backed) — Use this only to test the Settings UI components.
 
-**PUT /circuit-breakers**
-```json
-{
-  "failureThreshold": 40,
-  "requestCount": 20,
-  "timeoutSeconds": 90
-}
-```
-
-**POST /backends**
-```json
-{
-  "name": "new-service",
-  "url": "http://localhost:3005",
-  "healthPath": "/health",
-  "weight": 1
-}
-```
-
-**PUT /backends/:name**
-```json
-{
-  "url": "http://localhost:3006",
-  "weight": 2
-}
-```
-
-**PUT /security**
-```json
-{
-  "jwtExpiration": "2h",
-  "mfaEnabled": false,
-  "ipAccessControl": true,
-  "ipRules": {
-    "blacklist": ["192.0.2.200"]
-  }
-}
-```
-
-**PUT /alerts**
-```json
-{
-  "notifications": {
-    "email": "admin@example.com",
-    "webhookUrl": "https://slack.com/webhook/..."
-  }
-}
-```
