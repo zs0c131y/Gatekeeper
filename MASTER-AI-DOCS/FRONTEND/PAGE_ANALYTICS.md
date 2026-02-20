@@ -2,31 +2,41 @@
 
 ## 1. Responsibility
 
-This frontend page is responsible for displaying analytics data to the user. It fetches data from the backend and renders it in charts and tables.
+The Analytics page provides a comprehensive analysis dashboard for the Gatekeeper API Gateway. It visualizes gateway performance, traffic patterns, latency profiles, client behavior, and threat signals through 6 distinct sections.
 
-## 2. Workflow
+## 2. Layout & Sections
 
-1.  The user navigates to the Analytics page.
-2.  The component mounts and triggers a data fetch from the `/api/analytics` backend endpoint.
-3.  A loading state is displayed while the data is being fetched.
-4.  Once the data is received, it is stored in the component's state.
-5.  The component re-renders to display the data in various visualizations (e.g., charts, graphs, tables).
-6.  The user can interact with filters (e.g., date pickers) to request different views of the data.
+| # | Section | Component | Data Key |
+|---|---------|-----------|----------|
+| 1 | **KPI Summary** | 4 metric cards (Total Requests, Avg Latency, Error Rate, Throughput) | `kpi` |
+| 2 | **Latency Distribution** | Gradient bar chart showing request counts per latency bucket | `latencyDistribution` |
+| 3 | **HTTP Method Breakdown** | Donut chart with percentage legend (GET/POST/PUT/DELETE/PATCH) | `methodBreakdown` |
+| 4 | **Client Activity & Threat Detection** | Sortable table with per-IP stats and risk badges (Low/Medium/High) | `clients` |
+| 5 | **Hourly Traffic Pattern** | Stacked bar chart (requests vs errors by hour of day) | `hourlyTraffic` |
+| 6 | **Top Error Endpoints** | Ranked list with progress bars showing relative error volume | `topErrorEndpoints` |
 
 ## 3. Interfaces
 
 | Type | Name | Description |
 | :--- | :--- | :--- |
-| **UI** | Analytics Page | The main view for this module, containing all the analytics visualizations. |
-| **API Call** | `GET /api/analytics` | Fetches the analytics data from the backend. |
+| **UI Route** | `/dashboard/analytics` | Main analytics dashboard view. |
+| **API Call** | `GET /api/analytics/analysis` | Single aggregated call that returns all analysis data. |
 
 ## 4. Dependencies
 
-*   **Internal Components:** `DashboardLayout.jsx`
-*   **External Libs:** `react`, `recharts`, `fetch` or `axios`.
+*   **Internal Components:** `DashboardLayout.jsx`, `Card`, `Button`, `LoadingSkeleton`, `ErrorMessage`, `EmptyState`
+*   **External Libs:** `react`, `recharts`, `lucide-react`, `axios`
+*   **Custom Hooks:** `useApi` with auto-refresh (30s interval)
 
 ## 5. State Handling
 
-*   `data`: Stores the analytics data fetched from the backend.
-*   `isLoading`: A boolean flag to indicate when data is being fetched.
-*   `error`: Stores any error message if the API call fails.
+*   `data` — Full analysis payload from the API (`useApi` hook)
+*   `loading` / `error` — Request lifecycle states
+*   `autoRefresh` — Toggle for 30-second auto-refresh interval
+
+## 6. Design System
+
+*   Background: `bg-[#111111]`, borders: `border-white/10`
+*   Accent colors: amber (primary), green (healthy), red (errors), blue (throughput)
+*   Charts use gradient fills and dark tooltip styling
+*   Client risk levels: `Low` (green), `Medium` (amber), `High` (red) with color-coded badges
