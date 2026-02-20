@@ -16,7 +16,7 @@ services:
       dockerfile: DockerFiles/Dev/backend.Dockerfile
     image: backend:dev
     ports:
-      - "3000:3000"
+      - "9000:9000"
     volumes:
       - ../backend:/app
       - backend_node_modules:/app/node_modules
