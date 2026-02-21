@@ -12,8 +12,8 @@ services:
     volumes:
       - frontend_dist:/usr/share/nginx/html
     networks:
-      - backend
-  
+      - app
+
   frontend:
     build:
       context: ..
@@ -22,10 +22,9 @@ services:
     depends_on:
       - backend
     networks:
-      - backend
+      - app
     volumes:
       - frontend_dist:/app/dist
-
 
   backend:
     build:
@@ -34,36 +33,12 @@ services:
     image: gatekeeper-backend:prod
     env_file:
       - ./Env/backend.env
-    depends_on:
-      - mongo
-      - redis
     networks:
-      - backend
-
-  mongo:
-    image: mongo:7
-    env_file:
-      - ./Env/mongo.env
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - backend
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --aclfile /usr/local/etc/redis/users.acl
-    volumes:
-      - redis_data:/data
-      - ../redis/users.acl:/usr/local/etc/redis/users.acl:ro
-    networks:
-      - backend
-
+      - app
 
 volumes:
-  mongo_data:
-  redis_data:
   frontend_dist:
     name: gatekeeper_frontend_dist
 
 networks:
-  backend:
+  app:

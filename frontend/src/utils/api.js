@@ -40,6 +40,7 @@ export const api = {
   getTraffic: (params) => apiClient.get("/api/analytics/traffic", { params }),
   getEndpoints: () => apiClient.get("/api/analytics/endpoints"),
   getErrors: (params) => apiClient.get("/api/analytics/errors", { params }),
+  getAnalysis: () => apiClient.get("/api/analytics/analysis"),
 
   // Logs
   getLogs: (params) => apiClient.get("/api/logs", { params }),
