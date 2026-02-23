@@ -1,13 +1,23 @@
 /**
- * /api/logs — real-data implementation.
+ * /api/logs - log querying and streaming.
  */
 const { Router } = require("express");
 const Log = require("../src/models/Log");
 
 const router = Router();
 
-// SSE route must be registered BEFORE /:id to avoid being shadowed
-// GET /api/logs/stream/live — SSE for real-time log tailing
+function normalizeLog(log) {
+  if (!log) return log;
+  return {
+    ...log,
+    trace_id: log.traceId,
+    status_code: log.status,
+    latency_ms: log.latency,
+    client_ip: log.clientIp,
+    error_message: log.errorMessage,
+  };
+}
+
 router.get("/stream/live", (req, res) => {
   res.set({
     "Content-Type": "text/event-stream",
@@ -23,15 +33,16 @@ router.get("/stream/live", (req, res) => {
     try {
       const newLogs = await Log.find({ timestamp: { $gt: lastTimestamp } })
         .sort({ timestamp: 1 })
-        .limit(10)
+        .limit(25)
         .lean();
-      for (const l of newLogs) {
-        res.write(`data: ${JSON.stringify(l)}\n\n`);
-        if (new Date(l.timestamp) > lastTimestamp)
-          lastTimestamp = new Date(l.timestamp);
+
+      for (const log of newLogs) {
+        res.write(`data: ${JSON.stringify(normalizeLog(log))}\n\n`);
+        const ts = new Date(log.timestamp);
+        if (ts > lastTimestamp) lastTimestamp = ts;
       }
     } catch {
-      /* connection may have closed */
+      // Ignore per tick failures to keep stream alive.
     }
   };
 
@@ -39,25 +50,42 @@ router.get("/stream/live", (req, res) => {
   req.on("close", () => clearInterval(interval));
 });
 
-// GET /api/logs?page=1&limit=25&method=GET&status=4xx&search=trace-abc&clientIp=192
 router.get("/", async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
-    const { method, status, search, clientIp } = req.query;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 25, 100);
+
+    const method = req.query.method;
+    const status = req.query.status;
+    const search = req.query.search || req.query.trace_id;
+    const clientIp = req.query.clientIp || req.query.client_ip;
+    const endpoint = req.query.endpoint;
+    const from = req.query.from;
+    const to = req.query.to;
 
     const filter = {};
-    if (method) filter.method = method.toUpperCase();
-    if (clientIp) filter.clientIp = { $regex: clientIp };
-    if (search) filter.traceId = { $regex: search, $options: "i" };
+
+    if (method) filter.method = String(method).toUpperCase();
+    if (clientIp) filter.clientIp = { $regex: String(clientIp), $options: "i" };
+    if (endpoint) filter.endpoint = { $regex: String(endpoint), $options: "i" };
+    if (search) filter.traceId = { $regex: String(search), $options: "i" };
+
     if (status) {
-      const code = parseInt(status);
-      if (!isNaN(code)) {
+      const code = parseInt(status, 10);
+      if (!Number.isNaN(code)) {
         filter.status = code;
       } else {
-        const prefix = parseInt(status.charAt(0));
-        filter.status = { $gte: prefix * 100, $lt: (prefix + 1) * 100 };
+        const prefix = parseInt(String(status).charAt(0), 10);
+        if (!Number.isNaN(prefix)) {
+          filter.status = { $gte: prefix * 100, $lt: (prefix + 1) * 100 };
+        }
       }
+    }
+
+    if (from || to) {
+      filter.timestamp = {};
+      if (from) filter.timestamp.$gte = new Date(from);
+      if (to) filter.timestamp.$lte = new Date(to);
     }
 
     const [logs, total] = await Promise.all([
@@ -69,24 +97,32 @@ router.get("/", async (req, res, next) => {
       Log.countDocuments(filter),
     ]);
 
+    const totalPages = Math.ceil(total / limit) || 1;
+    const normalized = logs.map(normalizeLog);
+
     res.json({
-      logs,
+      logs: normalized,
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
+      pagination: {
+        total,
+        totalPages,
+        page,
+        limit,
+      },
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/logs/:traceId
 router.get("/:traceId", async (req, res, next) => {
   try {
     const log = await Log.findOne({ traceId: req.params.traceId }).lean();
     if (!log) return res.status(404).json({ error: "Log entry not found" });
-    res.json(log);
+    res.json(normalizeLog(log));
   } catch (err) {
     next(err);
   }

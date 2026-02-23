@@ -18,6 +18,8 @@ const redisKeys = {
   circuitFailureCount: (backendName) => `cb:failures:${backendName}`,
   /** @param {string} backendName */
   circuitLastFailure: (backendName) => `cb:lastfail:${backendName}`,
+  /** @param {string} backendName */
+  circuitHalfOpenCalls: (backendName) => `cb:halfopen:calls:${backendName}`,
 
   // Health scores
   /** @param {string} backendName */
@@ -29,6 +31,8 @@ const redisKeys = {
   /** @param {string} period */
   metricsCache: (period) => `metrics:cache:${period}`,
   overviewCache: () => 'metrics:overview',
+  /** @param {string} period */
+  analyticsCheckpoint: (period) => `metrics:checkpoint:${period}`,
 
   // Auth
   /** @param {string} jti */

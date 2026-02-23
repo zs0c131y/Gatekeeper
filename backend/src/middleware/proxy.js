@@ -3,13 +3,10 @@
  *
  * Responsibilities:
  *   1. Path transformation (stripPrefix / addPrefix from Route document).
- *   2. Forward the request to the upstream backend using native http/https.
- *   3. Stream the upstream response back to the client.
- *   4. Record circuit-breaker success/failure.
- *   5. Write a Log document to MongoDB (async, non-blocking).
- *
- * NOTE: `express.json()` has already parsed `req.body` by the time this
- * middleware runs.  The body is re-serialised into a Buffer for forwarding.
+ *   2. Forward request to upstream backend.
+ *   3. Stream upstream response back to client.
+ *   4. Record circuit breaker success/failure.
+ *   5. Queue structured logs for async persistence.
  */
 
 const http = require("http");
@@ -17,18 +14,18 @@ const https = require("https");
 const { URL } = require("url");
 const crypto = require("crypto");
 
-const Log = require("../models/Log");
+const Config = require("../models/Config");
 const { recordSuccess, recordFailure } = require("./circuitBreaker");
+const { enqueueLog } = require("../services/logQueue");
 
-// ── Path transformation ────────────────────────────────────────────────────
+let _customHeadersCache = null;
+let _customHeadersCachedAt = 0;
 
-/**
- * Apply route path rules to produce the upstream path.
- *
- * @param {string} incomingPath  — e.g. "/api/users/123"
- * @param {object} route         — Route document with optional stripPrefix / addPrefix
- * @returns {string}
- */
+function invalidateProxyConfigCache() {
+  _customHeadersCache = null;
+  _customHeadersCachedAt = 0;
+}
+
 function transformPath(incomingPath, route) {
   let path = incomingPath;
 
@@ -43,180 +40,201 @@ function transformPath(incomingPath, route) {
   return path || "/";
 }
 
-// ── Raw body buffer ────────────────────────────────────────────────────────
-
-/**
- * Re-serialise the already-parsed `req.body` into a Buffer suitable for
- * forwarding.  Returns `null` for GET/HEAD/OPTIONS requests or empty bodies.
- *
- * @param {import('express').Request} req
- * @returns {Buffer|null}
- */
 function getBodyBuffer(req) {
-  const noBodyMethods = new Set(["GET", "HEAD", "OPTIONS", "DELETE"]);
+  const noBodyMethods = new Set(["GET", "HEAD", "OPTIONS"]);
   if (noBodyMethods.has(req.method?.toUpperCase())) return null;
-  if (!req.body || Object.keys(req.body).length === 0) return null;
-  return Buffer.from(JSON.stringify(req.body), "utf8");
+
+  if (Buffer.isBuffer(req.rawBody) && req.rawBody.length > 0) {
+    return req.rawBody;
+  }
+
+  if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+    return req.body;
+  }
+
+  if (typeof req.body === "string" && req.body.length > 0) {
+    return Buffer.from(req.body, "utf8");
+  }
+
+  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
+    return Buffer.from(JSON.stringify(req.body), "utf8");
+  }
+
+  return null;
 }
 
-// ── Core proxy function ────────────────────────────────────────────────────
+async function getGlobalCustomHeaders() {
+  const now = Date.now();
+  if (_customHeadersCache && now - _customHeadersCachedAt < 30_000) {
+    return _customHeadersCache;
+  }
 
-/**
- * Forward the current request to `backend` at `upstreamPath`.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {object} backend  — Mongoose Backend doc (plain object)
- * @param {string} upstreamPath — transformed path including any query string
- * @returns {Promise<{ statusCode: number, durationMs: number }>}
- */
-function forwardRequest(req, res, backend, upstreamPath) {
-  return new Promise((resolve, reject) => {
-    const target = new URL(backend.baseUrl);
-    const isHttps = target.protocol === "https:";
-    const transport = isHttps ? https : http;
-    const timeout = backend.timeout ?? 5000;
+  try {
+    const doc = await Config.findOne({
+      key: "routing.custom_headers",
+      isActive: true,
+    }).lean();
 
-    // Carry the original query string
-    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
-    const fullPath = upstreamPath + qs;
-
-    // Re-serialised body (may be null)
-    const bodyBuf = getBodyBuffer(req);
-
-    // Hop-by-hop headers to strip
-    const HOP_BY_HOP = new Set([
-      "connection",
-      "keep-alive",
-      "proxy-authenticate",
-      "proxy-authorization",
-      "te",
-      "trailer",
-      "transfer-encoding",
-      "upgrade",
-    ]);
-
-    const forwardHeaders = {};
-    for (const [k, v] of Object.entries(req.headers)) {
-      if (!HOP_BY_HOP.has(k.toLowerCase())) {
-        forwardHeaders[k] = v;
-      }
-    }
-
-    forwardHeaders["host"] = target.host;
-    forwardHeaders["x-forwarded-for"] =
-      req.ip || req.socket?.remoteAddress || "";
-    forwardHeaders["x-forwarded-proto"] = req.protocol || "http";
-    forwardHeaders["x-forwarded-host"] = req.hostname || "";
-    forwardHeaders["x-request-id"] =
-      req.traceId || crypto.randomBytes(8).toString("hex");
-
-    if (bodyBuf) {
-      forwardHeaders["content-type"] = "application/json";
-      forwardHeaders["content-length"] = String(bodyBuf.length);
+    const value = doc?.value;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      _customHeadersCache = value;
     } else {
-      delete forwardHeaders["content-length"];
+      _customHeadersCache = {};
     }
+  } catch {
+    _customHeadersCache = {};
+  }
 
-    const start = Date.now();
+  _customHeadersCachedAt = now;
+  return _customHeadersCache;
+}
 
-    const proxyReq = transport.request(
-      {
-        hostname: target.hostname,
-        port: target.port || (isHttps ? 443 : 80),
-        path: fullPath,
-        method: req.method,
-        headers: forwardHeaders,
-        timeout,
-      },
-      (proxyRes) => {
-        const durationMs = Date.now() - start;
+function buildInjectedHeaders(route, globalHeaders) {
+  const routeHeaders = route.injectHeaders && typeof route.injectHeaders === "object"
+    ? route.injectHeaders
+    : {};
 
-        // Copy status + headers (strip hop-by-hop)
-        res.status(proxyRes.statusCode);
-        for (const [k, v] of Object.entries(proxyRes.headers)) {
-          if (!HOP_BY_HOP.has(k.toLowerCase())) {
-            res.setHeader(k, v);
-          }
+  return {
+    ...globalHeaders,
+    ...routeHeaders,
+  };
+}
+
+async function forwardRequest(req, res, backend, upstreamPath, route) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const target = new URL(backend.baseUrl);
+      const isHttps = target.protocol === "https:";
+      const transport = isHttps ? https : http;
+      const timeout = backend.timeout ?? 5000;
+
+      const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+      const fullPath = upstreamPath + qs;
+
+      const bodyBuf = getBodyBuffer(req);
+
+      const HOP_BY_HOP = new Set([
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+      ]);
+
+      const forwardHeaders = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (!HOP_BY_HOP.has(k.toLowerCase())) {
+          forwardHeaders[k] = v;
         }
+      }
 
-        proxyRes.pipe(res);
-        proxyRes.on("end", () =>
-          resolve({ statusCode: proxyRes.statusCode, durationMs }),
-        );
-      },
-    );
+      const globalCustomHeaders = await getGlobalCustomHeaders();
+      const mergedInjected = buildInjectedHeaders(route, globalCustomHeaders);
+      for (const [k, v] of Object.entries(mergedInjected)) {
+        if (v !== undefined && v !== null) {
+          forwardHeaders[k.toLowerCase()] = String(v);
+        }
+      }
 
-    proxyReq.on("timeout", () => {
-      proxyReq.destroy();
-      reject(
-        Object.assign(new Error("Upstream request timed out"), {
-          code: "UPSTREAM_TIMEOUT",
-        }),
+      forwardHeaders.host = target.host;
+      forwardHeaders["x-forwarded-for"] =
+        req.ip || req.socket?.remoteAddress || "";
+      forwardHeaders["x-forwarded-proto"] = req.protocol || "http";
+      forwardHeaders["x-forwarded-host"] = req.hostname || "";
+      forwardHeaders["x-request-id"] =
+        req.traceId || crypto.randomBytes(8).toString("hex");
+      forwardHeaders["x-trace-id"] = req.traceId;
+      forwardHeaders.traceparent = req.traceparent;
+
+      if (bodyBuf) {
+        if (!forwardHeaders["content-type"]) {
+          forwardHeaders["content-type"] = "application/json";
+        }
+        forwardHeaders["content-length"] = String(bodyBuf.length);
+      } else {
+        delete forwardHeaders["content-length"];
+      }
+
+      const start = Date.now();
+
+      const proxyReq = transport.request(
+        {
+          hostname: target.hostname,
+          port: target.port || (isHttps ? 443 : 80),
+          path: fullPath,
+          method: req.method,
+          headers: forwardHeaders,
+          timeout,
+        },
+        (proxyRes) => {
+          const durationMs = Date.now() - start;
+
+          res.status(proxyRes.statusCode);
+          for (const [k, v] of Object.entries(proxyRes.headers)) {
+            if (!HOP_BY_HOP.has(k.toLowerCase())) {
+              res.setHeader(k, v);
+            }
+          }
+
+          proxyRes.pipe(res);
+          proxyRes.on("end", () =>
+            resolve({ statusCode: proxyRes.statusCode, durationMs }),
+          );
+        },
       );
-    });
 
-    proxyReq.on("error", (err) => reject(err));
+      proxyReq.on("timeout", () => {
+        proxyReq.destroy();
+        reject(
+          Object.assign(new Error("Upstream request timed out"), {
+            code: "UPSTREAM_TIMEOUT",
+          }),
+        );
+      });
 
-    if (bodyBuf) {
-      proxyReq.write(bodyBuf);
+      proxyReq.on("error", (err) => reject(err));
+
+      if (bodyBuf) proxyReq.write(bodyBuf);
+      proxyReq.end();
+    } catch (err) {
+      reject(err);
     }
-    proxyReq.end();
   });
 }
 
-// ── Log writer ─────────────────────────────────────────────────────────────
-
-/**
- * Persist a Log document.  Called fire-and-forget — errors are swallowed so
- * logging failures never affect the in-flight request.
- */
 function writeLog(fields) {
-  Log.create(fields).catch((err) => {
-    console.error("[Proxy] Log write failed:", err.message);
-  });
+  enqueueLog(fields);
 }
 
-// ── Middleware factory ─────────────────────────────────────────────────────
-
-/**
- * Build an Express middleware that proxies the current request to `backend`
- * according to the routing `route` document.
- *
- * @param {object} backend — Backend Mongoose document (toObject or lean)
- * @param {object} route   — Route Mongoose document (toObject or lean)
- */
 function createProxyMiddleware(backend, route) {
   return async (req, res) => {
     const start = Date.now();
-    const traceId =
-      req.traceId || "gk-" + crypto.randomBytes(6).toString("hex");
+    const traceId = req.traceId || `gk-${crypto.randomBytes(6).toString("hex")}`;
     const upstreamPath = transformPath(req.path, route);
 
-    // Attach traceId to request so other middleware can read it
     req.traceId = traceId;
     res.setHeader("X-Trace-Id", traceId);
+    if (req.traceparent) res.setHeader("Traceparent", req.traceparent);
 
     let statusCode = 502;
     let errorMessage;
 
     try {
-      const result = await forwardRequest(req, res, backend, upstreamPath);
+      const result = await forwardRequest(req, res, backend, upstreamPath, route);
       statusCode = result.statusCode;
 
-      const isFailure = statusCode >= 500;
-      if (isFailure) {
-        await recordFailure(backend.name);
-      } else {
-        await recordSuccess(backend.name);
-      }
+      if (statusCode >= 500) await recordFailure(backend.name);
+      else await recordSuccess(backend.name);
     } catch (err) {
       errorMessage = err.message;
       await recordFailure(backend.name);
 
       if (!res.headersSent) {
         res.status(502).json({
-          error: "Bad gateway — upstream unreachable",
+          error: "Bad gateway - upstream unreachable",
           code: "UPSTREAM_ERROR",
           message: err.message,
           traceId,
@@ -232,7 +250,7 @@ function createProxyMiddleware(backend, route) {
         endpoint: req.path,
         status: statusCode,
         latency,
-        gatewayOverhead: Math.min(latency, 15), // overhead estimation
+        gatewayOverhead: Math.min(latency, 15),
         clientIp: req.ip || "0.0.0.0",
         backendId: backend._id ?? undefined,
         apiKeyId: req.apiKey?._id ?? undefined,
@@ -246,4 +264,9 @@ function createProxyMiddleware(backend, route) {
   };
 }
 
-module.exports = { createProxyMiddleware, transformPath };
+module.exports = {
+  createProxyMiddleware,
+  transformPath,
+  getGlobalCustomHeaders,
+  invalidateProxyConfigCache,
+};

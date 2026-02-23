@@ -1,21 +1,163 @@
 /**
- * /api/analytics — real-data implementation.
+ * /api/analytics - analytics and aggregations.
  */
 const { Router } = require("express");
+
 const Log = require("../src/models/Log");
 const Analytics = require("../src/models/Analytics");
 const ClientProfile = require("../src/models/ClientProfile");
-const data = require("../data/mockData");
 
 const router = Router();
 
-// GET /api/analytics/traffic?hours=24
+function toNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function percentile(sorted, pct) {
+  if (!sorted.length) return 0;
+  const idx = Math.floor((sorted.length - 1) * (pct / 100));
+  return sorted[idx] || 0;
+}
+
+function floorToHour(date) {
+  const d = new Date(date);
+  d.setMinutes(0, 0, 0);
+  return d;
+}
+
+async function getLogsSince(hours, limit = 25_000) {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  return Log.find({ timestamp: { $gte: since } })
+    .sort({ timestamp: -1 })
+    .limit(limit)
+    .lean();
+}
+
+function bucketByHour(logs) {
+  const map = {};
+  logs.forEach((l) => {
+    const hour = floorToHour(l.timestamp).toISOString();
+    if (!map[hour]) {
+      map[hour] = { time: hour, successful: 0, errors: 0, c4xx: 0, c5xx: 0 };
+    }
+    if (l.status >= 500) {
+      map[hour].errors += 1;
+      map[hour].c5xx += 1;
+    } else if (l.status >= 400) {
+      map[hour].errors += 1;
+      map[hour].c4xx += 1;
+    } else {
+      map[hour].successful += 1;
+    }
+  });
+  return Object.values(map).sort((a, b) => new Date(a.time) - new Date(b.time));
+}
+
+function buildLatencyDistribution(logs) {
+  const ranges = [
+    { range: "0-10ms", min: 0, max: 10 },
+    { range: "10-50ms", min: 10, max: 50 },
+    { range: "50-100ms", min: 50, max: 100 },
+    { range: "100-200ms", min: 100, max: 200 },
+    { range: "200-500ms", min: 200, max: 500 },
+    { range: "500ms+", min: 500, max: Infinity },
+  ];
+
+  return ranges.map((r) => ({
+    range: r.range,
+    count: logs.filter((l) => l.latency >= r.min && l.latency < r.max).length,
+  }));
+}
+
+function buildEndpointMetrics(logs) {
+  const map = {};
+
+  logs.forEach((l) => {
+    const ep = l.endpoint;
+    if (!map[ep]) {
+      map[ep] = {
+        endpoint: ep,
+        requests: 0,
+        errors: 0,
+        latencies: [],
+      };
+    }
+
+    map[ep].requests += 1;
+    map[ep].latencies.push(toNumber(l.latency));
+    if (l.status >= 400) map[ep].errors += 1;
+  });
+
+  return Object.values(map)
+    .map((e) => {
+      const sorted = [...e.latencies].sort((a, b) => a - b);
+      const avgLatency = e.latencies.length
+        ? Math.round(e.latencies.reduce((s, v) => s + v, 0) / e.latencies.length)
+        : 0;
+
+      return {
+        endpoint: e.endpoint,
+        requests: e.requests,
+        avgLatency,
+        p50: percentile(sorted, 50),
+        p95: percentile(sorted, 95),
+        p99: percentile(sorted, 99),
+        successRate: Number((((e.requests - e.errors) / Math.max(1, e.requests)) * 100).toFixed(1)),
+        errors: e.errors,
+      };
+    })
+    .sort((a, b) => b.requests - a.requests);
+}
+
+function buildMethodBreakdown(logs) {
+  const counts = {};
+  logs.forEach((l) => {
+    counts[l.method] = (counts[l.method] || 0) + 1;
+  });
+
+  const COLORS = {
+    GET: "#10b981",
+    POST: "#3b82f6",
+    PUT: "#f59e0b",
+    DELETE: "#ef4444",
+    PATCH: "#8b5cf6",
+  };
+
+  return Object.entries(counts)
+    .map(([method, count]) => ({
+      method,
+      count,
+      color: COLORS[method] || "#6b7280",
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function buildTopErrorEndpoints(logs) {
+  const totals = {};
+  const errors = {};
+
+  logs.forEach((l) => {
+    totals[l.endpoint] = (totals[l.endpoint] || 0) + 1;
+    if (l.status >= 400) errors[l.endpoint] = (errors[l.endpoint] || 0) + 1;
+  });
+
+  return Object.entries(errors)
+    .map(([endpoint, errorCount]) => ({
+      endpoint,
+      errorCount,
+      totalRequests: totals[endpoint] || 0,
+      errorRate: Number(((errorCount / Math.max(1, totals[endpoint] || 1)) * 100).toFixed(1)),
+    }))
+    .sort((a, b) => b.errorCount - a.errorCount)
+    .slice(0, 10);
+}
+
 router.get("/traffic", async (req, res, next) => {
   try {
-    const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-    // Try hourly Analytics documents first
     const analytics = await Analytics.find({
       period: "hour",
       timestamp: { $gte: since },
@@ -33,130 +175,67 @@ router.get("/traffic", async (req, res, next) => {
       );
     }
 
-    // Fallback: aggregate raw logs per hour
-    const logs = await Log.find({ timestamp: { $gte: since } }).lean();
-    const buckets = {};
-    for (const l of logs) {
-      const h = new Date(l.timestamp);
-      h.setMinutes(0, 0, 0);
-      const key = h.toISOString();
-      if (!buckets[key]) buckets[key] = { time: key, successful: 0, errors: 0 };
-      if (l.status >= 400) buckets[key].errors++;
-      else buckets[key].successful++;
-    }
-    res.json(
-      Object.values(buckets).sort(
-        (a, b) => new Date(a.time) - new Date(b.time),
-      ),
-    );
+    const logs = await getLogsSince(hours);
+    const buckets = bucketByHour(logs);
+    res.json(buckets.map((b) => ({ time: b.time, successful: b.successful, errors: b.errors })));
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/analytics/latency-distribution
-router.get("/latency-distribution", async (_req, res, next) => {
+router.get("/latency-distribution", async (req, res, next) => {
   try {
-    const logs = await Log.find().sort({ timestamp: -1 }).limit(1000).lean();
-    const ranges = [
-      { range: "0-10ms", min: 0, max: 10 },
-      { range: "10-50ms", min: 10, max: 50 },
-      { range: "50-100ms", min: 50, max: 100 },
-      { range: "100-200ms", min: 100, max: 200 },
-      { range: "200-500ms", min: 200, max: 500 },
-      { range: "500ms+", min: 500, max: Infinity },
-    ];
-    res.json(
-      ranges.map((r) => ({
-        range: r.range,
-        count: logs.filter((l) => l.latency >= r.min && l.latency < r.max)
-          .length,
-      })),
-    );
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const logs = await getLogsSince(hours, 30_000);
+    res.json(buildLatencyDistribution(logs));
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/analytics/errors
-router.get("/errors", async (_req, res, next) => {
+router.get("/errors", async (req, res, next) => {
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const logs = await Log.find({ timestamp: { $gte: since } }).lean();
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const logs = await getLogsSince(hours, 30_000);
+
     const c4xx = logs.filter((l) => l.status >= 400 && l.status < 500).length;
     const c5xx = logs.filter((l) => l.status >= 500).length;
 
-    const buckets = {};
-    for (const l of logs) {
-      const h = new Date(l.timestamp);
-      h.setMinutes(0, 0, 0);
-      const key = h.toISOString();
-      if (!buckets[key]) buckets[key] = { time: key, "4xx": 0, "5xx": 0 };
-      if (l.status >= 400 && l.status < 500) buckets[key]["4xx"]++;
-      else if (l.status >= 500) buckets[key]["5xx"]++;
-    }
+    const timeline = bucketByHour(logs).map((b) => ({
+      time: b.time,
+      "4xx": b.c4xx,
+      "5xx": b.c5xx,
+    }));
+
     res.json({
       byType: [
         { name: "4xx Client Errors", value: c4xx, color: "#f59e0b" },
         { name: "5xx Server Errors", value: c5xx, color: "#ef4444" },
       ],
-      timeline: Object.values(buckets).sort(
-        (a, b) => new Date(a.time) - new Date(b.time),
-      ),
+      timeline,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/analytics/endpoints
-router.get("/endpoints", async (_req, res, next) => {
+router.get("/endpoints", async (req, res, next) => {
   try {
-    const logs = await Log.find().sort({ timestamp: -1 }).limit(2000).lean();
-    const map = {};
-    for (const l of logs) {
-      const ep = l.endpoint;
-      if (!map[ep])
-        map[ep] = { endpoint: ep, requests: 0, lats: [], errors: 0 };
-      map[ep].requests++;
-      map[ep].lats.push(l.latency || 0);
-      if (l.status >= 400) map[ep].errors++;
-    }
-    res.json(
-      Object.values(map)
-        .map((e) => {
-          const sorted = [...e.lats].sort((a, b) => a - b);
-          const p = (pct) =>
-            sorted[Math.floor((sorted.length * pct) / 100)] || 0;
-          return {
-            endpoint: e.endpoint,
-            requests: e.requests,
-            avgLatency: Math.round(
-              e.lats.reduce((s, v) => s + v, 0) / e.lats.length,
-            ),
-            p95: p(95),
-            p99: p(99),
-            successRate: parseFloat(
-              (((e.requests - e.errors) / e.requests) * 100).toFixed(1),
-            ),
-            errors: e.errors,
-          };
-        })
-        .sort((a, b) => b.requests - a.requests)
-        .slice(0, 10),
-    );
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const logs = await getLogsSince(hours, 40_000);
+    res.json(buildEndpointMetrics(logs).slice(0, 20));
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/analytics/clients
 router.get("/clients", async (_req, res, next) => {
   try {
     const profiles = await ClientProfile.find()
       .sort({ totalRequests: -1 })
-      .limit(20)
+      .limit(50)
       .lean();
+
     res.json(
       profiles.map((p) => ({
         client: p.clientId,
@@ -172,188 +251,99 @@ router.get("/clients", async (_req, res, next) => {
   }
 });
 
-// GET /api/analytics/summary
 router.get("/summary", async (req, res, next) => {
   try {
-    const hours = Math.min(parseInt(req.query.hours) || 24, 168);
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const logs = await Log.find({ timestamp: { $gte: since } }).lean();
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const logs = await getLogsSince(hours, 40_000);
 
-    const buckets = {};
-    const epMap = {};
-    const latencies = [];
-    let c4xx = 0,
-      c5xx = 0;
+    const trafficBuckets = bucketByHour(logs);
+    const endpointMetrics = buildEndpointMetrics(logs).slice(0, 20);
+    const latencies = logs.map((l) => toNumber(l.latency)).sort((a, b) => a - b);
 
-    for (const l of logs) {
-      const h = new Date(l.timestamp);
-      h.setMinutes(0, 0, 0);
-      const key = h.toISOString();
-      if (!buckets[key]) buckets[key] = { time: key, successful: 0, errors: 0 };
-      if (l.status >= 400) {
-        buckets[key].errors++;
-        if (l.status < 500) c4xx++;
-        else c5xx++;
-      } else buckets[key].successful++;
-
-      latencies.push(l.latency || 0);
-
-      if (!epMap[l.endpoint])
-        epMap[l.endpoint] = {
-          endpoint: l.endpoint,
-          requests: 0,
-          lats: [],
-          errors: 0,
-        };
-      epMap[l.endpoint].requests++;
-      epMap[l.endpoint].lats.push(l.latency || 0);
-      if (l.status >= 400) epMap[l.endpoint].errors++;
-    }
-
-    const traffic = Object.values(buckets).sort(
-      (a, b) => new Date(a.time) - new Date(b.time),
-    );
-    const latSorted = [...latencies].sort((a, b) => a - b);
-    const lpct = (pct) =>
-      latSorted[Math.floor((latSorted.length * pct) / 100)] || 0;
-    const latDist = [
-      { range: "0-10ms", count: latencies.filter((v) => v < 10).length },
-      {
-        range: "10-50ms",
-        count: latencies.filter((v) => v >= 10 && v < 50).length,
-      },
-      {
-        range: "50-100ms",
-        count: latencies.filter((v) => v >= 50 && v < 100).length,
-      },
-      {
-        range: "100-200ms",
-        count: latencies.filter((v) => v >= 100 && v < 200).length,
-      },
-      {
-        range: "200-500ms",
-        count: latencies.filter((v) => v >= 200 && v < 500).length,
-      },
-      { range: "500ms+", count: latencies.filter((v) => v >= 500).length },
-    ];
+    const c4xx = logs.filter((l) => l.status >= 400 && l.status < 500).length;
+    const c5xx = logs.filter((l) => l.status >= 500).length;
 
     res.json({
-      traffic,
-      latencyDistribution: latDist,
+      traffic: trafficBuckets.map((b) => ({
+        time: b.time,
+        successful: b.successful,
+        errors: b.errors,
+      })),
+      latencyDistribution: buildLatencyDistribution(logs),
+      latencyPercentiles: {
+        p50: percentile(latencies, 50),
+        p95: percentile(latencies, 95),
+        p99: percentile(latencies, 99),
+      },
       errors: {
         byType: [
           { name: "4xx Client Errors", value: c4xx, color: "#f59e0b" },
           { name: "5xx Server Errors", value: c5xx, color: "#ef4444" },
         ],
-        timeline: traffic.map((t) => ({ time: t.time, "4xx": 0, "5xx": 0 })),
+        timeline: trafficBuckets.map((b) => ({
+          time: b.time,
+          "4xx": b.c4xx,
+          "5xx": b.c5xx,
+        })),
       },
-      endpoints: Object.values(epMap)
-        .map((e) => ({
-          endpoint: e.endpoint,
-          requests: e.requests,
-          avgLatency: Math.round(
-            e.lats.reduce((s, v) => s + v, 0) / (e.lats.length || 1),
-          ),
-          p95: lpct(95),
-          p99: lpct(99),
-          successRate: parseFloat(
-            (((e.requests - e.errors) / e.requests) * 100).toFixed(1),
-          ),
-          errors: e.errors,
-        }))
-        .sort((a, b) => b.requests - a.requests)
-        .slice(0, 10),
+      endpoints: endpointMetrics,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/analytics/analysis  — aggregated analysis dashboard payload
-router.get("/analysis", (_req, res) => {
-  const { logs: recentLogs } = data.getLogs({ limit: 500 });
+router.get("/analysis", async (req, res, next) => {
+  try {
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const logs = await getLogsSince(hours, 40_000);
 
-  // ── KPI Cards ───────────────────────────────────────────────────────────
-  const totalRequests = recentLogs.length;
-  const errors = recentLogs.filter((l) => l.status >= 400).length;
-  const avgLatency = totalRequests
-    ? Math.round(recentLogs.reduce((s, l) => s + l.latency, 0) / totalRequests)
-    : 0;
-  const errorRate = totalRequests
-    ? parseFloat(((errors / totalRequests) * 100).toFixed(1))
-    : 0;
-  // Throughput: requests per second over the time span of recent logs
-  const timeSpanMs =
-    recentLogs.length >= 2
-      ? new Date(recentLogs[0].timestamp) -
-        new Date(recentLogs[recentLogs.length - 1].timestamp)
-      : 1000;
-  const throughput = parseFloat(
-    (totalRequests / (timeSpanMs / 1000) || 0).toFixed(1),
-  );
+    const totalRequests = logs.length;
+    const errorCount = logs.filter((l) => l.status >= 400).length;
+    const avgLatency = totalRequests
+      ? Math.round(logs.reduce((s, l) => s + toNumber(l.latency), 0) / totalRequests)
+      : 0;
+    const errorRate = totalRequests
+      ? Number(((errorCount / totalRequests) * 100).toFixed(1))
+      : 0;
 
-  // ── Method Breakdown ────────────────────────────────────────────────────
-  const methodCounts = {};
-  recentLogs.forEach((l) => {
-    methodCounts[l.method] = (methodCounts[l.method] || 0) + 1;
-  });
-  const COLORS = {
-    GET: "#10b981",
-    POST: "#3b82f6",
-    PUT: "#f59e0b",
-    DELETE: "#ef4444",
-    PATCH: "#8b5cf6",
-  };
-  const methodBreakdown = Object.entries(methodCounts)
-    .map(([method, count]) => ({
-      method,
-      count,
-      color: COLORS[method] || "#6b7280",
-    }))
-    .sort((a, b) => b.count - a.count);
+    const oldest = logs[logs.length - 1]?.timestamp;
+    const newest = logs[0]?.timestamp;
+    const spanSec = oldest && newest
+      ? Math.max(1, (new Date(newest) - new Date(oldest)) / 1000)
+      : 1;
 
-  // ── Hourly Traffic Heatmap ──────────────────────────────────────────────
-  const hourlyCounts = Array(24).fill(0);
-  const hourlyErrors = Array(24).fill(0);
-  recentLogs.forEach((l) => {
-    const hour = new Date(l.timestamp).getHours();
-    hourlyCounts[hour]++;
-    if (l.status >= 400) hourlyErrors[hour]++;
-  });
-  const hourlyTraffic = hourlyCounts.map((count, hour) => ({
-    hour: `${String(hour).padStart(2, "0")}:00`,
-    requests: count,
-    errors: hourlyErrors[hour],
-  }));
+    const throughput = Number((totalRequests / spanSec).toFixed(2));
+    const trafficBuckets = bucketByHour(logs);
+    const endpointMetrics = buildEndpointMetrics(logs);
+    const clients = await ClientProfile.find()
+      .sort({ totalRequests: -1 })
+      .limit(20)
+      .lean();
 
-  // ── Top Error Endpoints ─────────────────────────────────────────────────
-  const endpointErrors = {};
-  const endpointTotal = {};
-  recentLogs.forEach((l) => {
-    endpointTotal[l.endpoint] = (endpointTotal[l.endpoint] || 0) + 1;
-    if (l.status >= 400)
-      endpointErrors[l.endpoint] = (endpointErrors[l.endpoint] || 0) + 1;
-  });
-  const topErrorEndpoints = Object.entries(endpointErrors)
-    .map(([endpoint, errorCount]) => ({
-      endpoint,
-      errorCount,
-      totalRequests: endpointTotal[endpoint] || 0,
-      errorRate: parseFloat(
-        ((errorCount / (endpointTotal[endpoint] || 1)) * 100).toFixed(1),
-      ),
-    }))
-    .sort((a, b) => b.errorCount - a.errorCount)
-    .slice(0, 10);
-
-  res.json({
-    kpi: { totalRequests, avgLatency, errorRate, throughput },
-    latencyDistribution: data.getLatencyDistribution(),
-    methodBreakdown,
-    clients: data.getClientActivity(),
-    hourlyTraffic,
-    topErrorEndpoints,
-  });
+    res.json({
+      kpi: { totalRequests, avgLatency, errorRate, throughput },
+      latencyDistribution: buildLatencyDistribution(logs),
+      methodBreakdown: buildMethodBreakdown(logs),
+      clients: clients.map((p) => ({
+        client: p.clientId,
+        requests: p.totalRequests,
+        errorRate: 0,
+        violations: p.blockedRequests,
+        lastSeen: p.lastSeen,
+        suspicious: p.isBlocked,
+      })),
+      hourlyTraffic: trafficBuckets.map((b) => ({
+        hour: new Date(b.time).toISOString().slice(11, 16),
+        requests: b.successful + b.errors,
+        errors: b.errors,
+      })),
+      topErrorEndpoints: buildTopErrorEndpoints(logs),
+      endpointPerformance: endpointMetrics.slice(0, 10),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

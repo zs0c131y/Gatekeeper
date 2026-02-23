@@ -53,9 +53,6 @@ export function HowItWorks() {
                 viewport={{ once: true, margin: "-100px" }}
                 className="relative"
             >
-                {/* Connection Line */}
-                <div className="hidden md:block absolute top-24 left-[16.67%] right-[16.67%] h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-
                 <div className="grid md:grid-cols-3 gap-12 md:gap-16">
                     {steps.map((step, index) => {
                         const Icon = step.icon;

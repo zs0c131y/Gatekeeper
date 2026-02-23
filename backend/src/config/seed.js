@@ -26,6 +26,18 @@ const DEFAULT_CONFIGS = [
     category: 'rate_limiting',
   },
   {
+    key: 'rate_limiting.manual_override_enabled',
+    value: false,
+    description: 'Enable fixed manual rate limit override for all clients',
+    category: 'rate_limiting',
+  },
+  {
+    key: 'rate_limiting.manual_override_rpm',
+    value: 0,
+    description: 'Manual override requests-per-minute when enabled',
+    category: 'rate_limiting',
+  },
+  {
     key: 'circuit_breaker.failure_threshold',
     value: 5,
     description: 'Number of failures before circuit opens',
@@ -50,6 +62,12 @@ const DEFAULT_CONFIGS = [
     category: 'routing',
   },
   {
+    key: 'routing.custom_headers',
+    value: {},
+    description: 'Custom headers injected into proxied upstream requests',
+    category: 'routing',
+  },
+  {
     key: 'security.jwt_expiry',
     value: 3600,
     description: 'JWT access token expiry in seconds',
@@ -60,6 +78,29 @@ const DEFAULT_CONFIGS = [
     value: 'x-api-key',
     description: 'HTTP header name for API key authentication',
     category: 'security',
+  },
+  {
+    key: 'alerts.email',
+    value: '',
+    description: 'Alert notification email recipient',
+    category: 'alerts',
+  },
+  {
+    key: 'alerts.webhook',
+    value: '',
+    description: 'Alert notification webhook URL',
+    category: 'alerts',
+  },
+  {
+    key: 'alerts.rules',
+    value: [
+      { name: 'Circuit Breaker State Changes', enabled: true },
+      { name: 'High Error Rate', enabled: true },
+      { name: 'High Latency', enabled: true },
+      { name: 'Rate Limit Violations', enabled: false },
+    ],
+    description: 'Alert rule enablement configuration',
+    category: 'alerts',
   },
 ];
 

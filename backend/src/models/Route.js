@@ -22,6 +22,10 @@ const routeSchema = new mongoose.Schema(
     addPrefix: {
       type: String,
     },
+    injectHeaders: {
+      type: Map,
+      of: String,
+    },
     isActive: {
       type: Boolean,
       required: true,

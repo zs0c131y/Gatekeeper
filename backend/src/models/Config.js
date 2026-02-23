@@ -17,7 +17,7 @@ const configSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ['rate_limiting', 'circuit_breaker', 'routing', 'security', 'general'],
+      enum: ['rate_limiting', 'circuit_breaker', 'routing', 'security', 'general', 'alerts'],
     },
     isActive: {
       type: Boolean,

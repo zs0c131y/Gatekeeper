@@ -1,46 +1,72 @@
 const express = require("express");
+const mongoose = require("mongoose");
 require("dotenv").config();
 
-const { connectMongoDB, connectRedis } = require("./src/config/database");
+const {
+  connectMongoDB,
+  connectRedis,
+  getRedisClient,
+} = require("./src/config/database");
 const { applySecurityMiddleware } = require("./src/middleware/security");
 const errorHandler = require("./src/middleware/errorHandler");
 const seed = require("./src/config/seed");
 
-// Existing routes
 const overviewRoutes = require("./routes/overview");
 const analyticsRoutes = require("./routes/analytics");
 const logsRoutes = require("./routes/logs");
 const settingsRoutes = require("./routes/settings");
 
-// New auth routes
 const authRoutes = require("./src/routes/auth");
 const apiKeyRoutes = require("./src/routes/apiKeys");
 
-// Gateway
 const gatewayRoutes = require("./src/routes/gateway");
 const { startHealthCheckLoop } = require("./src/services/healthCheck");
+const { startLogQueue } = require("./src/services/logQueue");
+const {
+  startAnalyticsAggregationLoop,
+} = require("./src/services/analyticsAggregator");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Security Middleware ───────────────────────────────────────────────────
 applySecurityMiddleware(app);
 
-// DEBUG: Log request body to debug validation errors
-app.use((req, res, next) => {
-  console.log(`[${req.method} ${req.url}]`);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  next();
-});
-
-// ── Routes ────────────────────────────────────────────────────────────────
 app.get("/", (_req, res) =>
   res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
 );
+
 app.get("/health", (_req, res) =>
   res.json({ status: "ok", uptime: process.uptime() }),
 );
+
+app.get("/api/status", async (_req, res) => {
+  const redis = getRedisClient();
+  let redisHealthy = false;
+
+  if (redis) {
+    try {
+      await redis.ping();
+      redisHealthy = true;
+    } catch {
+      redisHealthy = false;
+    }
+  }
+
+  res.json({
+    status: "ok",
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    services: {
+      mongodb: {
+        connected: mongoose.connection.readyState === 1,
+        readyState: mongoose.connection.readyState,
+      },
+      redis: {
+        connected: redisHealthy,
+      },
+    },
+  });
+});
 
 app.use("/api/overview", overviewRoutes);
 app.use("/api/analytics", analyticsRoutes);
@@ -50,22 +76,27 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin/api-keys", apiKeyRoutes);
 
-// Gateway — catch-all proxy (must come after all /api/* routes)
 app.use("/gateway", gatewayRoutes);
 
-// 404
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
-// ── Global Error Handler ──────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ── Start ─────────────────────────────────────────────────────────────────
 async function start() {
   try {
     await connectMongoDB();
-    await connectRedis();
+
+    try {
+      await connectRedis();
+    } catch (err) {
+      // Graceful degradation: continue without Redis-backed features.
+      console.warn("Redis unavailable, running in degraded mode:", err.message);
+    }
+
     await seed();
     await startHealthCheckLoop();
+    startLogQueue();
+    startAnalyticsAggregationLoop();
 
     app.listen(PORT, () => {
       console.log(`Gatekeeper API running on http://localhost:${PORT}`);

@@ -2,14 +2,13 @@
  * Circuit Breaker state machine.
  *
  * States:
- *   CLOSED     — normal operation; requests flow through.
- *   OPEN       — backend deemed unhealthy; requests are blocked immediately.
- *   HALF_OPEN  — cooldown elapsed; a limited set of test requests are allowed
- *                to probe the backend before transitioning to CLOSED or OPEN.
+ *   CLOSED    - normal operation; requests flow through.
+ *   OPEN      - backend deemed unhealthy; requests are blocked immediately.
+ *   HALF_OPEN - cooldown elapsed; a limited set of test requests are allowed
+ *               to probe the backend before transitioning to CLOSED or OPEN.
  *
  * All state is stored in Redis so all gateway instances share the same view.
- * If Redis is unavailable the circuit defaults to CLOSED (fail-open) so that
- * a cache outage does not take down the gateway.
+ * If Redis is unavailable the circuit defaults to CLOSED (fail-open).
  */
 
 const redisKeys = require("../config/redisKeys");
@@ -22,9 +21,7 @@ const STATES = Object.freeze({
   HALF_OPEN: "HALF_OPEN",
 });
 
-// ── Config helpers ─────────────────────────────────────────────────────────
-
-/** Cached config values (reloaded once per minute). */
+// Cached config values (reloaded once per minute)
 let _configCache = null;
 let _configCachedAt = 0;
 
@@ -49,22 +46,24 @@ async function getConfig() {
   });
 
   _configCache = {
-    failureThreshold: map["circuit_breaker.failure_threshold"] ?? 5,
-    recoveryTimeoutMs: map["circuit_breaker.recovery_timeout_ms"] ?? 30_000,
-    halfOpenMaxCalls: map["circuit_breaker.half_open_max_calls"] ?? 3,
+    failureThreshold: Number(map["circuit_breaker.failure_threshold"] ?? 5),
+    recoveryTimeoutMs: Number(
+      map["circuit_breaker.recovery_timeout_ms"] ?? 30_000,
+    ),
+    halfOpenMaxCalls: Number(map["circuit_breaker.half_open_max_calls"] ?? 3),
   };
   _configCachedAt = now;
   return _configCache;
 }
 
-// ── State machine ──────────────────────────────────────────────────────────
+function invalidateCircuitBreakerConfigCache() {
+  _configCache = null;
+  _configCachedAt = 0;
+}
 
 /**
  * Returns the current effective state of the circuit for `backendName`.
- * Automatically transitions OPEN → HALF_OPEN when the recovery timeout elapses.
- *
- * @param {string} backendName
- * @returns {Promise<'CLOSED'|'OPEN'|'HALF_OPEN'>}
+ * Automatically transitions OPEN -> HALF_OPEN when the recovery timeout elapses.
  */
 async function getState(backendName) {
   const redis = getRedisClient();
@@ -78,6 +77,7 @@ async function getState(backendName) {
     const lastFail = await redis.get(redisKeys.circuitLastFailure(backendName));
     if (lastFail && Date.now() - parseInt(lastFail, 10) >= recoveryTimeoutMs) {
       await redis.set(redisKeys.circuitState(backendName), STATES.HALF_OPEN);
+      await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
       return STATES.HALF_OPEN;
     }
   }
@@ -86,11 +86,28 @@ async function getState(backendName) {
 }
 
 /**
+ * Determines whether the current request can pass the breaker.
+ * Enforces HALF_OPEN probe limits.
+ */
+async function allowRequest(backendName) {
+  const state = await getState(backendName);
+  if (state === STATES.OPEN) return { state, allowed: false };
+  if (state !== STATES.HALF_OPEN) return { state, allowed: true };
+
+  const redis = getRedisClient();
+  if (!redis) return { state, allowed: true };
+
+  const { halfOpenMaxCalls } = await getConfig();
+  const key = redisKeys.circuitHalfOpenCalls(backendName);
+  const calls = await redis.incr(key);
+  if (calls === 1) await redis.expire(key, 60);
+
+  return { state, allowed: calls <= halfOpenMaxCalls };
+}
+
+/**
  * Record a successful upstream response.
- * HALF_OPEN → CLOSED + reset failure counters.
- * CLOSED stays CLOSED.
- *
- * @param {string} backendName
+ * HALF_OPEN/OPEN -> CLOSED + reset counters.
  */
 async function recordSuccess(backendName) {
   const redis = getRedisClient();
@@ -101,15 +118,13 @@ async function recordSuccess(backendName) {
     await redis.set(redisKeys.circuitState(backendName), STATES.CLOSED);
     await redis.del(redisKeys.circuitFailureCount(backendName));
     await redis.del(redisKeys.circuitLastFailure(backendName));
-    console.log(`[CircuitBreaker] ${backendName} → CLOSED`);
+    await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
+    console.log(`[CircuitBreaker] ${backendName} -> CLOSED`);
   }
 }
 
 /**
- * Record a failed upstream response / timeout.
- * Increments failure counter; when threshold is reached the circuit OPENS.
- *
- * @param {string} backendName
+ * Record a failed upstream response/timeout.
  */
 async function recordFailure(backendName) {
   const redis = getRedisClient();
@@ -117,44 +132,35 @@ async function recordFailure(backendName) {
 
   const { failureThreshold } = await getConfig();
   const failures = await redis.incr(redisKeys.circuitFailureCount(backendName));
-  await redis.set(
-    redisKeys.circuitLastFailure(backendName),
-    String(Date.now()),
-  );
+  await redis.set(redisKeys.circuitLastFailure(backendName), String(Date.now()));
 
   const currentState =
     (await redis.get(redisKeys.circuitState(backendName))) || STATES.CLOSED;
 
   if (failures >= failureThreshold && currentState !== STATES.OPEN) {
     await redis.set(redisKeys.circuitState(backendName), STATES.OPEN);
-    console.warn(
-      `[CircuitBreaker] ${backendName} → OPEN (failures=${failures})`,
-    );
+    await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
+    console.warn(`[CircuitBreaker] ${backendName} -> OPEN (failures=${failures})`);
   } else if (currentState === STATES.HALF_OPEN) {
-    // A failure during probe → back to OPEN
     await redis.set(redisKeys.circuitState(backendName), STATES.OPEN);
-    await redis.set(
-      redisKeys.circuitLastFailure(backendName),
-      String(Date.now()),
-    );
-    console.warn(`[CircuitBreaker] ${backendName} → OPEN (probe failed)`);
+    await redis.set(redisKeys.circuitLastFailure(backendName), String(Date.now()));
+    await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
+    console.warn(`[CircuitBreaker] ${backendName} -> OPEN (probe failed)`);
   }
 }
 
 /**
  * Express middleware factory that rejects requests when the circuit is OPEN.
- * Expects `req.targetBackend` to be populated by the router upstream.
- *
- * @param {string} backendName
  */
 function circuitBreakerGuard(backendName) {
-  return async (req, res, next) => {
-    const state = await getState(backendName);
-    if (state === STATES.OPEN) {
+  return async (_req, res, next) => {
+    const { state, allowed } = await allowRequest(backendName);
+    if (!allowed) {
       return res.status(503).json({
         error: "Service temporarily unavailable (circuit open)",
         code: "CIRCUIT_OPEN",
         backend: backendName,
+        state,
       });
     }
     next();
@@ -164,7 +170,9 @@ function circuitBreakerGuard(backendName) {
 module.exports = {
   STATES,
   getState,
+  allowRequest,
   recordSuccess,
   recordFailure,
   circuitBreakerGuard,
+  invalidateCircuitBreakerConfigCache,
 };

@@ -16,6 +16,9 @@ const { requireJWT, requireRole } = require('../middleware/auth');
 const {
   validateLogin,
   validateRegister,
+  validateUpdateProfile,
+  validateUpdatePreferences,
+  validateUpdateAvatar,
   validateChangePassword,
   handleValidationErrors,
 } = require('../middleware/validate');
@@ -25,6 +28,50 @@ const {
  * @param {Function} fn - Async route handler.
  */
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const AVATAR_DATA_URL_RE = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/;
+
+function getDefaultPreferences() {
+  return {
+    emailAlerts: true,
+    liveDashboard: true,
+    compactTables: false,
+  };
+}
+
+function normalizePreferences(preferences) {
+  const defaults = getDefaultPreferences();
+  return {
+    emailAlerts:
+      typeof preferences?.emailAlerts === 'boolean'
+        ? preferences.emailAlerts
+        : defaults.emailAlerts,
+    liveDashboard:
+      typeof preferences?.liveDashboard === 'boolean'
+        ? preferences.liveDashboard
+        : defaults.liveDashboard,
+    compactTables:
+      typeof preferences?.compactTables === 'boolean'
+        ? preferences.compactTables
+        : defaults.compactTables,
+  };
+}
+
+function buildAvatarDataUrl(avatar) {
+  if (!avatar?.data || !avatar?.mimeType) return null;
+  return `data:${avatar.mimeType};base64,${avatar.data}`;
+}
+
+function serializeUser(user) {
+  return {
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    lastLogin: user.lastLogin,
+    avatarDataUrl: buildAvatarDataUrl(user.avatar),
+    preferences: normalizePreferences(user.preferences),
+  };
+}
 
 // POST /api/auth/register  (admin only)
 router.post(
@@ -50,12 +97,7 @@ router.post(
 
     res.status(201).json({
       message: 'User created successfully',
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
+      user: serializeUser(user),
     });
   })
 );
@@ -100,12 +142,7 @@ router.post(
     res.json({
       accessToken,
       refreshToken,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
+      user: serializeUser(user),
     });
   })
 );
@@ -172,19 +209,172 @@ router.get(
   requireJWT,
   asyncHandler(async (req, res) => {
     const user = await User.findById(req.user.userId).select(
-      'username email role lastLogin'
+      'username email role lastLogin avatar preferences'
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
     }
 
-    res.json({
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      lastLogin: user.lastLogin,
+    res.json(serializeUser(user));
+  })
+);
+
+// PUT /api/auth/profile
+router.put(
+  '/profile',
+  requireJWT,
+  validateUpdateProfile,
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const hasUsername = typeof req.body.username === 'string';
+    const hasEmail = typeof req.body.email === 'string';
+
+    if (!hasUsername && !hasEmail) {
+      return res.status(400).json({
+        error: 'At least one field is required',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+    }
+
+    const nextUsername = hasUsername ? req.body.username.trim().toLowerCase() : user.username;
+    const nextEmail = hasEmail ? req.body.email.trim().toLowerCase() : user.email;
+
+    const duplicate = await User.findOne({
+      _id: { $ne: user._id },
+      $or: [{ username: nextUsername }, { email: nextEmail }],
+    }).lean();
+
+    if (duplicate) {
+      const conflictField = duplicate.email === nextEmail ? 'email' : 'username';
+      return res.status(409).json({
+        error: `A user with that ${conflictField} already exists`,
+        code: 'USER_EXISTS',
+      });
+    }
+
+    user.username = nextUsername;
+    user.email = nextEmail;
+    await user.save();
+
+    res.json(serializeUser(user));
+  })
+);
+
+// GET /api/auth/preferences
+router.get(
+  '/preferences',
+  requireJWT,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user.userId).select('preferences');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+    }
+
+    res.json(normalizePreferences(user.preferences));
+  })
+);
+
+// PUT /api/auth/preferences
+router.put(
+  '/preferences',
+  requireJWT,
+  validateUpdatePreferences,
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const allowedKeys = ['emailAlerts', 'liveDashboard', 'compactTables'];
+    const payload = {};
+
+    allowedKeys.forEach((key) => {
+      if (typeof req.body[key] === 'boolean') {
+        payload[key] = req.body[key];
+      }
     });
+
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({
+        error: 'At least one preference field is required',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+    }
+
+    user.preferences = {
+      ...normalizePreferences(user.preferences),
+      ...payload,
+    };
+    await user.save();
+
+    res.json(serializeUser(user));
+  })
+);
+
+// PUT /api/auth/avatar
+router.put(
+  '/avatar',
+  requireJWT,
+  validateUpdateAvatar,
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const shouldClear = req.body.clear === true;
+    const avatarDataUrl = typeof req.body.avatarDataUrl === 'string'
+      ? req.body.avatarDataUrl
+      : '';
+
+    if (!shouldClear && !avatarDataUrl) {
+      return res.status(400).json({
+        error: 'avatarDataUrl is required unless clear=true',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+    }
+
+    if (shouldClear) {
+      user.avatar = undefined;
+      await user.save();
+      return res.json(serializeUser(user));
+    }
+
+    const match = avatarDataUrl.match(AVATAR_DATA_URL_RE);
+    if (!match) {
+      return res.status(400).json({
+        error: 'Invalid avatar format',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const mimeType = `image/${match[1]}`;
+    const base64Data = match[2];
+    const estimatedBytes = Math.floor((base64Data.length * 3) / 4);
+    const maxBytes = 140 * 1024;
+
+    if (estimatedBytes > maxBytes) {
+      return res.status(413).json({
+        error: 'Avatar exceeds size limit (140KB)',
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+    }
+
+    user.avatar = {
+      data: base64Data,
+      mimeType,
+      updatedAt: new Date(),
+    };
+    await user.save();
+
+    res.json(serializeUser(user));
   })
 );
 

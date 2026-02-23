@@ -1,4 +1,4 @@
-import { Home, BarChart3, FileText, Settings, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { Home, BarChart3, FileText, Settings, ChevronLeft, ChevronRight, Zap, UserCircle2 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
@@ -7,6 +7,7 @@ const navItems = [
     { name: 'Analytics', path: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Logs', path: '/dashboard/logs', icon: FileText },
     { name: 'Settings', path: '/dashboard/settings', icon: Settings },
+    { name: 'Profile', path: '/dashboard/profile', icon: UserCircle2 },
 ];
 
 export function Sidebar({ collapsed, onToggle }) {

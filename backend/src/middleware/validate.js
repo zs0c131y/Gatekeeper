@@ -67,6 +67,71 @@ const validateRegister = [
 ];
 
 /**
+ * Validation rules for profile update endpoint.
+ */
+const validateUpdateProfile = [
+  body('username')
+    .optional()
+    .isLength({ min: 3, max: 30 })
+    .withMessage('Username must be between 3 and 30 characters')
+    .matches(/^[a-zA-Z0-9_]+$/)
+    .withMessage('Username can only contain letters, numbers, and underscores')
+    .trim(),
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('Valid email is required')
+    .normalizeEmail(),
+];
+
+/**
+ * Validation rules for profile preferences update endpoint.
+ */
+const validateUpdatePreferences = [
+  body('emailAlerts')
+    .optional()
+    .isBoolean()
+    .withMessage('emailAlerts must be a boolean')
+    .toBoolean(),
+  body('liveDashboard')
+    .optional()
+    .isBoolean()
+    .withMessage('liveDashboard must be a boolean')
+    .toBoolean(),
+  body('compactTables')
+    .optional()
+    .isBoolean()
+    .withMessage('compactTables must be a boolean')
+    .toBoolean(),
+];
+
+/**
+ * Validation rules for avatar upload endpoint.
+ */
+const validateUpdateAvatar = [
+  body('clear')
+    .optional()
+    .isBoolean()
+    .withMessage('clear must be a boolean')
+    .toBoolean(),
+  body('avatarDataUrl')
+    .optional()
+    .isString()
+    .withMessage('avatarDataUrl must be a string')
+    .bail()
+    .custom((value) => {
+      const ok = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value);
+      if (!ok) {
+        throw new Error('avatarDataUrl must be a valid PNG/JPEG/WEBP data URL');
+      }
+      if (value.length > 200000) {
+        throw new Error('avatarDataUrl is too large');
+      }
+      return true;
+    }),
+];
+
+/**
  * Validation rules for creating an API key.
  */
 const validateCreateApiKey = [
@@ -110,6 +175,9 @@ function handleValidationErrors(req, res, next) {
 module.exports = {
   validateLogin,
   validateRegister,
+  validateUpdateProfile,
+  validateUpdatePreferences,
+  validateUpdateAvatar,
   validateChangePassword,
   validateCreateApiKey,
   handleValidationErrors,

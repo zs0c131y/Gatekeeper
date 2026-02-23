@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -6,15 +6,21 @@ import {
   Clock,
   AlertTriangle,
   Server,
+  Gauge,
+  Wifi,
+  PlayCircle,
+  PauseCircle,
 } from "lucide-react";
 import {
-  LineChart,
   Line,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
+  ReferenceLine,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -110,7 +116,73 @@ export function Overview() {
     error,
     refetch,
   } = useApi(() => api.getOverview());
+  const {
+    data: alertsData,
+    refetch: refetchAlerts,
+  } = useApi(() => api.getOverviewAlerts());
   const [isPaused, setIsPaused] = useState(false);
+  const [trafficWindow, setTrafficWindow] = useState(30);
+
+  const trafficData = useMemo(() => {
+    const points = Array.isArray(overviewData?.trafficData)
+      ? overviewData.trafficData
+      : [];
+
+    return points.map((point) => ({
+      ...point,
+      requests: Number(point.requests || 0),
+      timeLabel: new Date(point.timestamp).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    }));
+  }, [overviewData?.trafficData]);
+
+  const trafficSlice = useMemo(
+    () => trafficData.slice(-trafficWindow),
+    [trafficData, trafficWindow],
+  );
+
+  const trafficStats = useMemo(() => {
+    if (trafficSlice.length === 0) {
+      return {
+        average: 0,
+        latest: 0,
+        peak: 0,
+        min: 0,
+        trendPercent: 0,
+        stability: 0,
+      };
+    }
+
+    const values = trafficSlice.map((point) => point.requests);
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const average = total / values.length;
+    const latest = values[values.length - 1];
+    const previous = values[values.length - 2] ?? latest;
+    const peak = Math.max(...values);
+    const min = Math.min(...values);
+    const trendPercent =
+      previous === 0 ? (latest > 0 ? 100 : 0) : ((latest - previous) / previous) * 100;
+    const stability = Math.max(
+      0,
+      100 - ((peak - min) / Math.max(peak, 1)) * 100,
+    );
+
+    return {
+      average,
+      latest,
+      peak,
+      min,
+      trendPercent,
+      stability,
+    };
+  }, [trafficSlice]);
+
+  const burstData = useMemo(
+    () => trafficSlice.slice(-16),
+    [trafficSlice],
+  );
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -118,10 +190,11 @@ export function Overview() {
 
     const interval = setInterval(() => {
       refetch();
+      refetchAlerts();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [isPaused, refetch]);
+  }, [isPaused, refetch, refetchAlerts]);
 
   const getLatencyColor = (latency) => {
     if (latency < 50) return "text-green-400";
@@ -213,92 +286,187 @@ export function Overview() {
         />
       </div>
 
-      {/* Live Traffic Chart */}
-      <Card className="bg-[#111111] border-white/10">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle>Traffic Overview</CardTitle>
-            <div className="flex items-center gap-4">
+      {/* Live Traffic Command Panel */}
+      <Card className="relative overflow-hidden bg-[#0f0f0f] border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.22),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(249,115,22,0.15),transparent_40%)]" />
+        <CardHeader className="relative pb-3">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div>
               <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "w-2 h-2 rounded-full",
-                    !loading ? "bg-green-400 animate-pulse" : "bg-red-400",
-                  )}
-                ></div>
-                <span className="text-sm text-gray-400">
-                  {!loading ? "Connected" : "Loading..."}
+                <CardTitle className="text-white text-xl">Traffic Overview</CardTitle>
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-green-500/30 bg-green-500/10 text-green-300">
+                  <Wifi className="w-3 h-3" />
+                  {isPaused ? "Paused" : "Live"}
                 </span>
               </div>
+              <CardDescription className="text-gray-400 mt-1">
+                Real-time ingress pressure with throughput, trend, and burst
+                telemetry.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {[10, 20, 30].map((windowSize) => (
+                <Button
+                  key={windowSize}
+                  onClick={() => setTrafficWindow(windowSize)}
+                  size="sm"
+                  variant={trafficWindow === windowSize ? "default" : "outline"}
+                  className={cn(
+                    "h-8 px-3 text-xs font-semibold border transition-colors",
+                    trafficWindow === windowSize
+                      ? "bg-amber-500 text-black border-amber-400 hover:bg-amber-400"
+                      : "bg-white/5 border-white/15 text-gray-300 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  {windowSize} points
+                </Button>
+              ))}
               <Button
                 onClick={() => setIsPaused(!isPaused)}
-                variant="outline"
                 size="sm"
-                className="bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                className="bg-white/5 hover:bg-white/10 border border-white/15 text-white"
               >
-                {isPaused ? "Resume Auto-Refresh" : "Pause Auto-Refresh"}
+                {isPaused ? (
+                  <>
+                    <PlayCircle className="w-4 h-4 mr-2" />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <PauseCircle className="w-4 h-4 mr-2" />
+                    Pause
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {overviewData.trafficData && overviewData.trafficData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={overviewData.trafficData}>
-                <defs>
-                  <linearGradient
-                    id="colorRequests"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                <XAxis
-                  dataKey="timestamp"
-                  stroke="#666"
-                  tick={{ fill: "#666" }}
-                  tickFormatter={(value) => {
-                    const date = new Date(value);
-                    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, "0")}`;
-                  }}
-                />
-                <YAxis
-                  stroke="#666"
-                  tick={{ fill: "#666" }}
-                  label={{
-                    value: "Requests",
-                    angle: -90,
-                    position: "insideLeft",
-                    fill: "#666",
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1a1a1a",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                  }}
-                  labelStyle={{ color: "#999" }}
-                  labelFormatter={(value) => new Date(value).toLocaleString()}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="requests"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorRequests)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState message="No traffic data available" icon="inbox" />
-          )}
+        <CardContent className="relative space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+            <div className="xl:col-span-3 rounded-xl border border-white/10 bg-black/30 p-3 md:p-4">
+              {trafficSlice.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={trafficSlice}>
+                    <defs>
+                      <linearGradient id="trafficFillMain" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff12" vertical={false} />
+                    <XAxis
+                      dataKey="timeLabel"
+                      stroke="#7f7f7f"
+                      tick={{ fill: "#8f8f8f", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      stroke="#7f7f7f"
+                      tick={{ fill: "#8f8f8f", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={35}
+                    />
+                    <Tooltip content={<TrafficTooltip />} />
+                    <ReferenceLine
+                      y={trafficStats.average}
+                      stroke="#fbbf24"
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.65}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="requests"
+                      stroke="#f59e0b"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#trafficFillMain)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="requests"
+                      stroke="#fcd34d"
+                      strokeWidth={1}
+                      dot={false}
+                      strokeOpacity={0.75}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState message="No traffic data available" icon="inbox" />
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <p className="text-xs uppercase text-gray-500 mb-1">Current Throughput</p>
+                <p className="text-2xl font-bold text-amber-300">
+                  {trafficStats.latest.toLocaleString()}
+                </p>
+                <p
+                  className={cn(
+                    "text-xs mt-1",
+                    trafficStats.trendPercent >= 0 ? "text-green-300" : "text-red-300",
+                  )}
+                >
+                  {trafficStats.trendPercent >= 0 ? "+" : ""}
+                  {trafficStats.trendPercent.toFixed(1)}% vs previous point
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <p className="text-xs uppercase text-gray-500 mb-1">Average Window Load</p>
+                <p className="text-2xl font-bold text-white">
+                  {trafficStats.average.toFixed(1)}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Peak {trafficStats.peak.toLocaleString()} / Min{" "}
+                  {trafficStats.min.toLocaleString()}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <p className="text-xs uppercase text-gray-500 mb-1">Signal Stability</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-2xl font-bold text-emerald-300">
+                    {trafficStats.stability.toFixed(0)}%
+                  </p>
+                  <Activity className="w-4 h-4 text-emerald-300" />
+                </div>
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500"
+                    style={{ width: `${trafficStats.stability}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-black/25 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-sm font-semibold text-white flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-amber-300" />
+                Burst Distribution
+              </p>
+              <span className="text-xs text-gray-500">
+                Last {burstData.length} intervals
+              </span>
+            </div>
+            {burstData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={110}>
+                <BarChart data={burstData}>
+                  <XAxis dataKey="timeLabel" hide />
+                  <YAxis hide />
+                  <Tooltip content={<TrafficTooltip />} />
+                  <Bar dataKey="requests" radius={[4, 4, 0, 0]} fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState message="No burst data available" icon="inbox" />
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -427,8 +595,61 @@ export function Overview() {
               )}
             </CardContent>
           </Card>
+
+          {/* Recent Alerts */}
+          <Card className="bg-[#111111] border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg">Recent Alerts</CardTitle>
+              <CardDescription className="text-gray-400">
+                Latest circuit, health, and traffic events
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {Array.isArray(alertsData) && alertsData.length > 0 ? (
+                <div className="space-y-3">
+                  {alertsData.slice(0, 6).map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="p-3 rounded-lg bg-white/5 border border-white/10"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold uppercase",
+                            alert.type === "error" && "text-red-400",
+                            alert.type === "warning" && "text-amber-400",
+                            alert.type === "info" && "text-blue-400",
+                          )}
+                        >
+                          {alert.type}
+                        </span>
+                        <span className="text-xs text-gray-500">{alert.time}</span>
+                      </div>
+                      <p className="text-sm text-gray-200 mt-1">{alert.message}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No recent alerts" icon="inbox" />
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TrafficTooltip({ active, payload, label }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const requests = payload[0]?.value ?? 0;
+
+  return (
+    <div className="rounded-lg border border-white/15 bg-[#0e0e0e]/95 px-3 py-2 shadow-xl shadow-black/50">
+      <p className="text-xs text-gray-400">{label}</p>
+      <p className="text-sm font-semibold text-amber-300">
+        {Number(requests).toLocaleString()} req
+      </p>
     </div>
   );
 }

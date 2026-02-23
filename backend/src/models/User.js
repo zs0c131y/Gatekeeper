@@ -35,6 +35,32 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
+    avatar: {
+      data: {
+        type: String,
+      },
+      mimeType: {
+        type: String,
+        enum: ['image/png', 'image/jpeg', 'image/webp'],
+      },
+      updatedAt: {
+        type: Date,
+      },
+    },
+    preferences: {
+      emailAlerts: {
+        type: Boolean,
+        default: true,
+      },
+      liveDashboard: {
+        type: Boolean,
+        default: true,
+      },
+      compactTables: {
+        type: Boolean,
+        default: false,
+      },
+    },
   },
   { timestamps: true }
 );

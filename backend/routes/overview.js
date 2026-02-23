@@ -8,8 +8,13 @@ const Alert = require("../src/models/Alert");
 const { getRedisClient } = require("../src/config/database");
 const redisKeys = require("../src/config/redisKeys");
 const { scoreToStatus } = require("../src/services/healthCheck");
+const { requireJWT } = require("../src/middleware/auth");
 
 const router = Router();
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 async function getCircuitStateRaw(redis, name) {
   if (!redis) return "CLOSED";
@@ -270,6 +275,139 @@ router.get("/alerts", async (_req, res, next) => {
         isRead: a.isRead,
       })),
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/overview/alerts/:id/read
+router.patch("/alerts/:id/read", requireJWT, async (req, res, next) => {
+  try {
+    const updated = await Alert.findByIdAndUpdate(
+      req.params.id,
+      { isRead: true },
+      { new: true },
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ error: "Alert not found" });
+    }
+
+    res.json({
+      id: updated._id,
+      type: updated.type,
+      message: updated.message,
+      timestamp: updated.createdAt,
+      isRead: updated.isRead,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/overview/alerts/read-all
+router.patch("/alerts/read-all", requireJWT, async (_req, res, next) => {
+  try {
+    const result = await Alert.updateMany({ isRead: false }, { isRead: true });
+    res.json({
+      success: true,
+      updatedCount: result.modifiedCount || 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/overview/search?q=...
+router.get("/search", requireJWT, async (req, res, next) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (q.length < 2) {
+      return res.json({ query: q, items: [] });
+    }
+
+    const regex = new RegExp(escapeRegex(q), "i");
+
+    const [logs, backends, alerts] = await Promise.all([
+      Log.find({
+        $or: [{ endpoint: regex }, { traceId: regex }, { clientIp: regex }],
+      })
+        .sort({ timestamp: -1 })
+        .limit(100)
+        .lean(),
+      Backend.find({
+        $or: [{ name: regex }, { url: regex }, { healthPath: regex }],
+      })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .lean(),
+      Alert.find({ message: regex })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean(),
+    ]);
+
+    const endpointMap = new Map();
+    const traceMap = new Map();
+
+    logs.forEach((log) => {
+      if (log.endpoint && regex.test(log.endpoint)) {
+        endpointMap.set(log.endpoint, (endpointMap.get(log.endpoint) || 0) + 1);
+      }
+      if (log.traceId && !traceMap.has(log.traceId)) {
+        traceMap.set(log.traceId, log);
+      }
+    });
+
+    const items = [];
+
+    Array.from(endpointMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .forEach(([endpoint, requests]) => {
+        items.push({
+          id: `endpoint-${endpoint}`,
+          type: "endpoint",
+          title: endpoint,
+          subtitle: `${requests} recent requests`,
+          route: "/dashboard/analytics",
+        });
+      });
+
+    Array.from(traceMap.entries())
+      .slice(0, 5)
+      .forEach(([traceId, log]) => {
+        items.push({
+          id: `trace-${traceId}`,
+          type: "trace",
+          title: traceId,
+          subtitle: `${log.method} ${log.endpoint} - ${log.status}`,
+          route: "/dashboard/logs",
+        });
+      });
+
+    backends.slice(0, 5).forEach((backend) => {
+      items.push({
+        id: `backend-${backend._id}`,
+        type: "backend",
+        title: backend.name,
+        subtitle: backend.url,
+        route: "/dashboard/settings",
+      });
+    });
+
+    alerts.slice(0, 5).forEach((alert) => {
+      items.push({
+        id: `alert-${alert._id}`,
+        type: "alert",
+        title: alert.message,
+        subtitle: `${alert.type.toUpperCase()} - ${new Date(alert.createdAt).toLocaleString()}`,
+        route: "/dashboard",
+        alertId: alert._id,
+      });
+    });
+
+    res.json({ query: q, items: items.slice(0, 15) });
   } catch (err) {
     next(err);
   }
