@@ -8,6 +8,7 @@ import {
   Eye,
   RefreshCw,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   BarChart,
   Bar,
@@ -371,18 +372,11 @@ export function Analytics() {
                     </td>
                     <td className="py-3 text-gray-400 text-right">{c.lastSeen}</td>
                     <td className="py-3 text-center">
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 rounded-full text-xs font-semibold",
-                          c.suspicious
-                            ? "bg-red-500/20 text-red-400"
-                            : c.violations > 10
-                              ? "bg-amber-500/20 text-amber-400"
-                              : "bg-green-500/20 text-green-400",
-                        )}
+                      <Badge
+                        variant={c.suspicious ? "destructive" : c.violations > 10 ? "warning" : "success"}
                       >
                         {c.suspicious ? "High" : c.violations > 10 ? "Medium" : "Low"}
-                      </span>
+                      </Badge>
                     </td>
                   </tr>
                 ))}

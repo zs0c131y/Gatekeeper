@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── shadcn/ui CSS design tokens ─────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* AMOLED dark theme */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 90%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 90%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 90%;
+
+    /* Amber/golden primary */
+    --primary: 38 93% 50%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 90%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 64%;
+
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 90%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 90%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 38 93% 50%;
+
+    --radius: 0.5rem;
+  }
+}
+
 /* Base Styles */
 * {
   margin: 0;

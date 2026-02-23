@@ -31,6 +31,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useApi } from "../../hooks/useApi";
 import { api } from "../../utils/api";
 import { LoadingSkeleton } from "../../components/common/LoadingSkeleton";
@@ -112,26 +114,22 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-[#111111] to-[#0a0a0a] border border-white/10 rounded-xl p-2 shadow-2xl shadow-black/40 backdrop-blur-sm">
-        <div className="flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-          {tabs.map((tab) => (
-            <Button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              variant={activeTab === tab.id ? "default" : "ghost"}
-              size="sm"
-              className={cn(
-                "h-9 px-5 text-sm font-medium whitespace-nowrap transition-all duration-300",
-                activeTab === tab.id
-                  ? "bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg shadow-amber-500/25"
-                  : "text-gray-400 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              {tab.label}
-            </Button>
-          ))}
+      {/* Tab navigation using Tabs component */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="bg-gradient-to-br from-[#111111] to-[#0a0a0a] border border-white/10 rounded-xl p-2 shadow-2xl shadow-black/40 backdrop-blur-sm overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+          <TabsList className="bg-transparent border-0 p-0 gap-1 flex-nowrap w-full justify-start">
+            {tabs.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className="h-9 px-5 text-sm font-medium whitespace-nowrap"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
         </div>
-      </div>
+      </Tabs>
 
       <SaveToast status={saveStatus} />
 
@@ -385,16 +383,15 @@ function CircuitBreakersTab({ settings, backends, onSave }) {
                     <div className="text-white font-medium">{b.name}</div>
                     <div className="text-xs text-gray-400">Health: {b.healthScore ?? "N/A"}</div>
                   </div>
-                  <span
-                    className={cn(
-                      "px-2 py-1 text-xs font-semibold rounded",
-                      b.circuitState === "CLOSED" && "bg-green-500/20 text-green-400",
-                      b.circuitState === "OPEN" && "bg-red-500/20 text-red-400",
-                      b.circuitState === "HALF_OPEN" && "bg-amber-500/20 text-amber-400",
-                    )}
+                  <Badge
+                    variant={
+                      b.circuitState === "CLOSED" ? "success"
+                      : b.circuitState === "OPEN" ? "destructive"
+                      : "warning"
+                    }
                   >
                     {b.circuitState || "CLOSED"}
-                  </span>
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -448,10 +445,17 @@ function BackendsTab({ backends, refetch }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {backends.map((backend) => (
-            <Card key={backend._id} className="bg-white/5 border-white/10">
+            <Card key={backend._id} className="bg-white/5 border-white/10 hover:border-amber-500/20 transition-colors">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-white">{backend.name}</CardTitle>
-                <div className="text-sm text-gray-400 font-mono">{backend.url || backend.base_url}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg text-white truncate">{backend.name}</CardTitle>
+                    <div className="text-sm text-gray-400 font-mono truncate">{backend.url || backend.base_url}</div>
+                  </div>
+                  <Badge variant={backend.isActive !== false ? "success" : "destructive"} className="shrink-0">
+                    {backend.isActive !== false ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between">

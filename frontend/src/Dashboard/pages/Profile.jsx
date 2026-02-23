@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../utils/api";
+import { Progress } from "@/components/ui/progress";
 
 const SUPPORTED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -604,7 +605,7 @@ export function Profile() {
                   className="bg-white/5 border-white/10 text-white focus-visible:ring-amber-500/60 focus-visible:ring-offset-0"
                 />
 
-                <div className="space-y-2">
+                  <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-400">Strength</span>
                     <span
@@ -619,19 +620,14 @@ export function Profile() {
                       {strength.label}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full transition-all duration-300",
-                        strength.score <= 2 && "bg-red-500",
-                        strength.score > 2 &&
-                          strength.score <= 4 &&
-                          "bg-amber-500",
-                        strength.score > 4 && "bg-green-500",
-                      )}
-                      style={{ width: `${(strength.score / 5) * 100}%` }}
-                    />
-                  </div>
+                  <Progress
+                    value={(strength.score / 5) * 100}
+                    indicatorClassName={cn(
+                      strength.score <= 2 && "bg-red-500 from-red-500 to-red-400",
+                      strength.score > 2 && strength.score <= 4 && "bg-amber-500 from-amber-500 to-amber-400",
+                      strength.score > 4 && "bg-green-500 from-green-500 to-emerald-400",
+                    )}
+                  />
                 </div>
 
                 {passwordError && (

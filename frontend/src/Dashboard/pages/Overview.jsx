@@ -33,6 +33,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useApi } from "../../hooks/useApi";
 import { api } from "../../utils/api";
 import {
@@ -294,10 +295,10 @@ export function Overview() {
             <div>
               <div className="flex items-center gap-2">
                 <CardTitle className="text-white text-xl">Traffic Overview</CardTitle>
-                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-green-500/30 bg-green-500/10 text-green-300">
+                <Badge variant={isPaused ? "secondary" : "success"} className="gap-1">
                   <Wifi className="w-3 h-3" />
                   {isPaused ? "Paused" : "Live"}
-                </span>
+                </Badge>
               </div>
               <CardDescription className="text-gray-400 mt-1">
                 Real-time ingress pressure with throughput, trend, and burst
@@ -552,39 +553,34 @@ export function Overview() {
                       key={index}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-white">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-medium text-white truncate">
                             {backend.name}
                           </span>
-                          <span
-                            className={cn(
-                              "px-2 py-0.5 text-xs font-semibold rounded",
-                              backend.circuitState === "CLOSED" &&
-                                "bg-green-500/20 text-green-400",
-                              backend.circuitState === "OPEN" &&
-                                "bg-red-500/20 text-red-400",
-                              backend.circuitState === "HALF_OPEN" &&
-                                "bg-amber-500/20 text-amber-400",
-                            )}
+                          <Badge
+                            variant={
+                              backend.circuitState === "CLOSED" ? "success"
+                              : backend.circuitState === "OPEN" ? "destructive"
+                              : "warning"
+                            }
                           >
                             {backend.circuitState || "CLOSED"}
-                          </span>
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-400">
                             Health: {backend.healthScore}%
                           </span>
-                          <span
-                            className={cn(
-                              "text-xs",
-                              backend.status === "healthy" && "text-green-400",
-                              backend.status === "degraded" && "text-amber-400",
-                              backend.status === "unhealthy" && "text-red-400",
-                            )}
+                          <Badge
+                            variant={
+                              backend.status === "healthy" ? "success"
+                              : backend.status === "degraded" ? "warning"
+                              : "destructive"
+                            }
                           >
                             {backend.status}
-                          </span>
+                          </Badge>
                         </div>
                       </div>
                     </div>
@@ -613,16 +609,15 @@ export function Overview() {
                       className="p-3 rounded-lg bg-white/5 border border-white/10"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={cn(
-                            "text-xs font-semibold uppercase",
-                            alert.type === "error" && "text-red-400",
-                            alert.type === "warning" && "text-amber-400",
-                            alert.type === "info" && "text-blue-400",
-                          )}
+                        <Badge
+                          variant={
+                            alert.type === "error" ? "destructive"
+                            : alert.type === "warning" ? "warning"
+                            : "info"
+                          }
                         >
                           {alert.type}
-                        </span>
+                        </Badge>
                         <span className="text-xs text-gray-500">{alert.time}</span>
                       </div>
                       <p className="text-sm text-gray-200 mt-1">{alert.message}</p>

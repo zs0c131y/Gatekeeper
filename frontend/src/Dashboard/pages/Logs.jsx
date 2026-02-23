@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Copy, Eye, Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '../../lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,15 +72,14 @@ function LogDetailModal({ log, onClose }) {
                             <div className="bg-black/30 rounded-lg p-4 space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Method:</span>
-                                    <span className={cn(
-                                        "font-semibold px-2 py-0.5 rounded",
-                                        displayLog.method === 'GET' && "bg-blue-500/20 text-blue-400",
-                                        displayLog.method === 'POST' && "bg-green-500/20 text-green-400",
-                                        displayLog.method === 'PUT' && "bg-amber-500/20 text-amber-400",
-                                        displayLog.method === 'DELETE' && "bg-red-500/20 text-red-400"
+                                    <Badge className={cn(
+                                        displayLog.method === 'GET' && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                        displayLog.method === 'POST' && "bg-green-500/20 text-green-400 border-green-500/30",
+                                        displayLog.method === 'PUT' && "bg-amber-500/20 text-amber-400 border-amber-500/30",
+                                        displayLog.method === 'DELETE' && "bg-red-500/20 text-red-400 border-red-500/30"
                                     )}>
                                         {displayLog.method}
-                                    </span>
+                                    </Badge>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Endpoint:</span>
@@ -107,15 +107,14 @@ function LogDetailModal({ log, onClose }) {
                             <div className="bg-black/30 rounded-lg p-4 space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Status Code:</span>
-                                    <span className={cn(
-                                        "font-semibold px-2 py-0.5 rounded",
-                                        statusCode >= 200 && statusCode < 300 && "bg-green-500/20 text-green-400",
-                                        statusCode >= 300 && statusCode < 400 && "bg-blue-500/20 text-blue-400",
-                                        statusCode >= 400 && statusCode < 500 && "bg-amber-500/20 text-amber-400",
-                                        statusCode >= 500 && "bg-red-500/20 text-red-400"
+                                    <Badge className={cn(
+                                        statusCode >= 200 && statusCode < 300 && "bg-green-500/20 text-green-400 border-green-500/30",
+                                        statusCode >= 300 && statusCode < 400 && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                        statusCode >= 400 && statusCode < 500 && "bg-amber-500/20 text-amber-400 border-amber-500/30",
+                                        statusCode >= 500 && "bg-red-500/20 text-red-400 border-red-500/30"
                                     )}>
                                         {statusCode}
-                                    </span>
+                                    </Badge>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Latency:</span>
@@ -250,20 +249,20 @@ export function Logs() {
 
     const getMethodColor = (method) => {
         const colors = {
-            'GET': 'bg-blue-500/20 text-blue-400',
-            'POST': 'bg-green-500/20 text-green-400',
-            'PUT': 'bg-amber-500/20 text-amber-400',
-            'DELETE': 'bg-red-500/20 text-red-400',
-            'PATCH': 'bg-purple-500/20 text-purple-400'
+            'GET': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            'POST': 'bg-green-500/20 text-green-400 border-green-500/30',
+            'PUT': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            'DELETE': 'bg-red-500/20 text-red-400 border-red-500/30',
+            'PATCH': 'bg-purple-500/20 text-purple-400 border-purple-500/30'
         };
-        return colors[method] || 'bg-gray-500/20 text-gray-400';
+        return colors[method] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     };
 
     const getStatusColor = (status) => {
-        if (status >= 200 && status < 300) return 'bg-green-500/20 text-green-400';
-        if (status >= 300 && status < 400) return 'bg-blue-500/20 text-blue-400';
-        if (status >= 400 && status < 500) return 'bg-amber-500/20 text-amber-400';
-        return 'bg-red-500/20 text-red-400';
+        if (status >= 200 && status < 300) return 'bg-green-500/20 text-green-400 border-green-500/30';
+        if (status >= 300 && status < 400) return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+        if (status >= 400 && status < 500) return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
     };
 
     const getLatencyColor = (latency) => {
@@ -435,15 +434,15 @@ export function Logs() {
                                             {new Date(log.timestamp).toLocaleTimeString()}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={cn("px-2 py-1 rounded text-xs font-semibold", getMethodColor(log.method))}>
+                                            <Badge className={getMethodColor(log.method)}>
                                                 {log.method}
-                                            </span>
+                                            </Badge>
                                         </td>
                                         <td className="px-4 py-3 text-white font-mono text-xs">{log.endpoint}</td>
                                         <td className="px-4 py-3">
-                                            <span className={cn("px-2 py-1 rounded text-xs font-semibold", getStatusColor(log.status_code || log.status))}>
+                                            <Badge className={getStatusColor(log.status_code || log.status)}>
                                                 {log.status_code || log.status}
-                                            </span>
+                                            </Badge>
                                         </td>
                                         <td className={cn("px-4 py-3 text-right font-medium", getLatencyColor(log.latency_ms || log.latency))}>
                                             {log.latency_ms || log.latency}ms
