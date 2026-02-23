@@ -11,7 +11,7 @@ cd backend/scripts || exit 1
 echo "[1/2] Registering Temp Server 1..."
 node register_service.js << 'EOF'
 Temp Server 1
-http://temp:3000
+http://localhost:3000
 /temp1/*
 /temp1
 n
@@ -21,7 +21,7 @@ echo ""
 echo "[2/2] Registering Temp Server 2..."
 node register_service.js << 'EOF'
 Temp Server 2
-http://temp-2:3000
+http://localhost:3000
 /temp2/*
 /temp2
 n
