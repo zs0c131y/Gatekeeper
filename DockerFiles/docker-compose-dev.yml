@@ -25,11 +25,29 @@ services:
   
   temp:
     build:
-      context: ..
-      dockerfile: DockerFiles/Dev/temp.dockerfile
+      context: ../temp_servers
+      dockerfile: ../DockerFiles/Dev/temp.dockerfile
     image: temp-1:dev
     ports:
       - "4000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  temp-2:
+    build:
+      context: ../temp_servers
+      dockerfile: ../DockerFiles/Dev/temp.dockerfile
+    image: temp-2:dev
+    ports:
+      - "4001:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001"]
+      interval: 10s
+      timeout: 5s 
+      retries: 5
     
 
 volumes:
