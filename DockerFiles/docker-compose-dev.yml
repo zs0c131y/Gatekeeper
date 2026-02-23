@@ -22,6 +22,36 @@ services:
       - backend_node_modules:/app/node_modules
     env_file:
       - ./Env/backend.env
+    depends_on:
+      - temp
+      - temp-2
+  
+  temp:
+    build:
+      context: ../temp_servers
+      dockerfile: ../DockerFiles/Dev/temp.dockerfile
+    image: temp-1:dev
+    ports:
+      - "4000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/gateway/temp1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  temp-2:
+    build:
+      context: ../temp_servers
+      dockerfile: ../DockerFiles/Dev/temp.dockerfile
+    image: temp-2:dev
+    ports:
+      - "4001:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/gateway/temp2"]
+      interval: 10s
+      timeout: 5s 
+      retries: 5
+    
 
 volumes:
   backend_node_modules:

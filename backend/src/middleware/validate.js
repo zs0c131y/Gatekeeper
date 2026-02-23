@@ -5,7 +5,7 @@ const { body, validationResult } = require('express-validator');
  */
 const validateLogin = [
   body('email')
-    .isEmail()
+    .isEmail({ require_tld: false })
     .withMessage('Valid email is required')
     .normalizeEmail(),
   body('password')
@@ -46,7 +46,7 @@ const validateRegister = [
     .withMessage('Username can only contain letters, numbers, and underscores')
     .trim(),
   body('email')
-    .isEmail()
+    .isEmail({ require_tld: false })
     .withMessage('Valid email is required')
     .normalizeEmail(),
   body('password')
