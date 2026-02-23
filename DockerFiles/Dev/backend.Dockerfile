@@ -10,4 +10,4 @@ COPY backend/ .
 
 EXPOSE 9000
 
-CMD ["sh", "-c", "npm install && (sh /app/scripts/docker_auto_register.sh &) && npm run dev"]
+CMD ["sh", "-c", "npm install && (sleep 5 && node /app/scripts/docker_auto_register.js &) && npm run dev"]
