@@ -117,10 +117,9 @@ export function Overview() {
     error,
     refetch,
   } = useApi(() => api.getOverview());
-  const {
-    data: alertsData,
-    refetch: refetchAlerts,
-  } = useApi(() => api.getOverviewAlerts());
+  const { data: alertsData, refetch: refetchAlerts } = useApi(() =>
+    api.getOverviewAlerts(),
+  );
   const [isPaused, setIsPaused] = useState(false);
   const [trafficWindow, setTrafficWindow] = useState(30);
 
@@ -164,7 +163,11 @@ export function Overview() {
     const peak = Math.max(...values);
     const min = Math.min(...values);
     const trendPercent =
-      previous === 0 ? (latest > 0 ? 100 : 0) : ((latest - previous) / previous) * 100;
+      previous === 0
+        ? latest > 0
+          ? 100
+          : 0
+        : ((latest - previous) / previous) * 100;
     const stability = Math.max(
       0,
       100 - ((peak - min) / Math.max(peak, 1)) * 100,
@@ -180,10 +183,7 @@ export function Overview() {
     };
   }, [trafficSlice]);
 
-  const burstData = useMemo(
-    () => trafficSlice.slice(-16),
-    [trafficSlice],
-  );
+  const burstData = useMemo(() => trafficSlice.slice(-16), [trafficSlice]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -294,8 +294,13 @@ export function Overview() {
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <CardTitle className="text-white text-xl">Traffic Overview</CardTitle>
-                <Badge variant={isPaused ? "secondary" : "success"} className="gap-1">
+                <CardTitle className="text-white text-xl">
+                  Traffic Overview
+                </CardTitle>
+                <Badge
+                  variant={isPaused ? "secondary" : "success"}
+                  className="gap-1"
+                >
                   <Wifi className="w-3 h-3" />
                   {isPaused ? "Paused" : "Live"}
                 </Badge>
@@ -349,12 +354,30 @@ export function Overview() {
                 <ResponsiveContainer width="100%" height={320}>
                   <AreaChart data={trafficSlice}>
                     <defs>
-                      <linearGradient id="trafficFillMain" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} />
+                      <linearGradient
+                        id="trafficFillMain"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#f59e0b"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#f59e0b"
+                          stopOpacity={0.02}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff12" vertical={false} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#ffffff12"
+                      vertical={false}
+                    />
                     <XAxis
                       dataKey="timeLabel"
                       stroke="#7f7f7f"
@@ -401,14 +424,18 @@ export function Overview() {
 
             <div className="space-y-3">
               <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase text-gray-500 mb-1">Current Throughput</p>
+                <p className="text-xs uppercase text-gray-500 mb-1">
+                  Current Throughput
+                </p>
                 <p className="text-2xl font-bold text-amber-300">
                   {trafficStats.latest.toLocaleString()}
                 </p>
                 <p
                   className={cn(
                     "text-xs mt-1",
-                    trafficStats.trendPercent >= 0 ? "text-green-300" : "text-red-300",
+                    trafficStats.trendPercent >= 0
+                      ? "text-green-300"
+                      : "text-red-300",
                   )}
                 >
                   {trafficStats.trendPercent >= 0 ? "+" : ""}
@@ -417,7 +444,9 @@ export function Overview() {
               </div>
 
               <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase text-gray-500 mb-1">Average Window Load</p>
+                <p className="text-xs uppercase text-gray-500 mb-1">
+                  Average Window Load
+                </p>
                 <p className="text-2xl font-bold text-white">
                   {trafficStats.average.toFixed(1)}
                 </p>
@@ -428,7 +457,9 @@ export function Overview() {
               </div>
 
               <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase text-gray-500 mb-1">Signal Stability</p>
+                <p className="text-xs uppercase text-gray-500 mb-1">
+                  Signal Stability
+                </p>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-2xl font-bold text-emerald-300">
                     {trafficStats.stability.toFixed(0)}%
@@ -461,7 +492,11 @@ export function Overview() {
                   <XAxis dataKey="timeLabel" hide />
                   <YAxis hide />
                   <Tooltip content={<TrafficTooltip />} />
-                  <Bar dataKey="requests" radius={[4, 4, 0, 0]} fill="#f59e0b" />
+                  <Bar
+                    dataKey="requests"
+                    radius={[4, 4, 0, 0]}
+                    fill="#f59e0b"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -560,9 +595,11 @@ export function Overview() {
                           </span>
                           <Badge
                             variant={
-                              backend.circuitState === "CLOSED" ? "success"
-                              : backend.circuitState === "OPEN" ? "destructive"
-                              : "warning"
+                              backend.circuitState === "CLOSED"
+                                ? "success"
+                                : backend.circuitState === "OPEN"
+                                  ? "destructive"
+                                  : "warning"
                             }
                           >
                             {backend.circuitState || "CLOSED"}
@@ -574,9 +611,11 @@ export function Overview() {
                           </span>
                           <Badge
                             variant={
-                              backend.status === "healthy" ? "success"
-                              : backend.status === "degraded" ? "warning"
-                              : "destructive"
+                              backend.status === "healthy"
+                                ? "success"
+                                : backend.status === "degraded"
+                                  ? "warning"
+                                  : "destructive"
                             }
                           >
                             {backend.status}
@@ -611,16 +650,22 @@ export function Overview() {
                       <div className="flex items-center justify-between gap-2">
                         <Badge
                           variant={
-                            alert.type === "error" ? "destructive"
-                            : alert.type === "warning" ? "warning"
-                            : "info"
+                            alert.type === "error"
+                              ? "destructive"
+                              : alert.type === "warning"
+                                ? "warning"
+                                : "info"
                           }
                         >
                           {alert.type}
                         </Badge>
-                        <span className="text-xs text-gray-500">{alert.time}</span>
+                        <span className="text-xs text-gray-500">
+                          {alert.time}
+                        </span>
                       </div>
-                      <p className="text-sm text-gray-200 mt-1">{alert.message}</p>
+                      <p className="text-sm text-gray-200 mt-1">
+                        {alert.message}
+                      </p>
                     </div>
                   ))}
                 </div>

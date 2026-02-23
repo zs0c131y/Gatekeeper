@@ -144,7 +144,8 @@ export function Analytics() {
   } = data;
 
   const methodTotal = methodBreakdown.reduce((s, m) => s + m.count, 0);
-  const maxErrorCount = topErrorEndpoints.length > 0 ? topErrorEndpoints[0].errorCount : 1;
+  const maxErrorCount =
+    topErrorEndpoints.length > 0 ? topErrorEndpoints[0].errorCount : 1;
 
   return (
     <div className="space-y-6">
@@ -152,12 +153,16 @@ export function Analytics() {
         <div>
           <h1 className="text-2xl font-bold text-white">Analysis Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Deep-dive into gateway performance, traffic patterns, and threat signals
+            Deep-dive into gateway performance, traffic patterns, and threat
+            signals
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Select value={String(hours)} onValueChange={(value) => setHours(Number(value))}>
+          <Select
+            value={String(hours)}
+            onValueChange={(value) => setHours(Number(value))}
+          >
             <SelectTrigger className="w-[150px] bg-white/5 border-white/10 text-white focus:ring-amber-500/50 focus:ring-offset-0">
               <SelectValue placeholder="Time range" />
             </SelectTrigger>
@@ -180,7 +185,9 @@ export function Analytics() {
                 : "bg-white/5 hover:bg-white/10",
             )}
           >
-            <RefreshCw className={cn("w-4 h-4 mr-2", autoRefresh && "animate-spin")} />
+            <RefreshCw
+              className={cn("w-4 h-4 mr-2", autoRefresh && "animate-spin")}
+            />
             {autoRefresh ? "Auto-Refresh On" : "Auto-Refresh Off"}
           </Button>
         </div>
@@ -232,10 +239,19 @@ export function Analytics() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                <XAxis dataKey="range" stroke="#666" tick={{ fill: "#888", fontSize: 11 }} />
+                <XAxis
+                  dataKey="range"
+                  stroke="#666"
+                  tick={{ fill: "#888", fontSize: 11 }}
+                />
                 <YAxis stroke="#666" tick={{ fill: "#888", fontSize: 11 }} />
                 <Tooltip contentStyle={chartTooltipStyle} />
-                <Bar dataKey="count" fill="url(#latGrad)" radius={[4, 4, 0, 0]} name="Requests" />
+                <Bar
+                  dataKey="count"
+                  fill="url(#latGrad)"
+                  radius={[4, 4, 0, 0]}
+                  name="Requests"
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -270,15 +286,29 @@ export function Analytics() {
 
               <div className="flex-1 space-y-3">
                 {methodBreakdown.map((m) => (
-                  <div key={m.method} className="flex items-center justify-between">
+                  <div
+                    key={m.method}
+                    className="flex items-center justify-between"
+                  >
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color }} />
-                      <span className="text-sm font-mono text-gray-300">{m.method}</span>
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: m.color }}
+                      />
+                      <span className="text-sm font-mono text-gray-300">
+                        {m.method}
+                      </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-semibold text-white">{m.count}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {m.count}
+                      </span>
                       <span className="text-xs text-gray-500 ml-1">
-                        ({((m.count / Math.max(1, methodTotal)) * 100).toFixed(0)}%)
+                        (
+                        {((m.count / Math.max(1, methodTotal)) * 100).toFixed(
+                          0,
+                        )}
+                        %)
                       </span>
                     </div>
                   </div>
@@ -299,23 +329,50 @@ export function Analytics() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left text-gray-400 font-medium pb-3">Endpoint</th>
-                    <th className="text-right text-gray-400 font-medium pb-3">Requests</th>
-                    <th className="text-right text-gray-400 font-medium pb-3">P50</th>
-                    <th className="text-right text-gray-400 font-medium pb-3">P95</th>
-                    <th className="text-right text-gray-400 font-medium pb-3">P99</th>
-                    <th className="text-right text-gray-400 font-medium pb-3">Success</th>
+                    <th className="text-left text-gray-400 font-medium pb-3">
+                      Endpoint
+                    </th>
+                    <th className="text-right text-gray-400 font-medium pb-3">
+                      Requests
+                    </th>
+                    <th className="text-right text-gray-400 font-medium pb-3">
+                      P50
+                    </th>
+                    <th className="text-right text-gray-400 font-medium pb-3">
+                      P95
+                    </th>
+                    <th className="text-right text-gray-400 font-medium pb-3">
+                      P99
+                    </th>
+                    <th className="text-right text-gray-400 font-medium pb-3">
+                      Success
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {endpointPerformance.map((row, i) => (
-                    <tr key={i} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-3 text-white font-mono">{row.endpoint}</td>
-                      <td className="py-3 text-right text-gray-300">{row.requests.toLocaleString()}</td>
-                      <td className="py-3 text-right text-gray-300">{row.p50}ms</td>
-                      <td className="py-3 text-right text-amber-400">{row.p95}ms</td>
-                      <td className="py-3 text-right text-red-400">{row.p99}ms</td>
-                      <td className="py-3 text-right text-green-400">{row.successRate}%</td>
+                    <tr
+                      key={i}
+                      className="border-b border-white/5 hover:bg-white/5"
+                    >
+                      <td className="py-3 text-white font-mono">
+                        {row.endpoint}
+                      </td>
+                      <td className="py-3 text-right text-gray-300">
+                        {row.requests.toLocaleString()}
+                      </td>
+                      <td className="py-3 text-right text-gray-300">
+                        {row.p50}ms
+                      </td>
+                      <td className="py-3 text-right text-amber-400">
+                        {row.p95}ms
+                      </td>
+                      <td className="py-3 text-right text-red-400">
+                        {row.p99}ms
+                      </td>
+                      <td className="py-3 text-right text-green-400">
+                        {row.successRate}%
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -331,7 +388,9 @@ export function Analytics() {
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-amber-400" />
-            <CardTitle className="text-lg">Client Activity & Threat Detection</CardTitle>
+            <CardTitle className="text-lg">
+              Client Activity & Threat Detection
+            </CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -339,23 +398,44 @@ export function Analytics() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="text-left text-gray-400 font-medium pb-3">Client IP</th>
-                  <th className="text-right text-gray-400 font-medium pb-3">Requests</th>
-                  <th className="text-right text-gray-400 font-medium pb-3">Error Rate</th>
-                  <th className="text-right text-gray-400 font-medium pb-3">Violations</th>
-                  <th className="text-right text-gray-400 font-medium pb-3">Last Seen</th>
-                  <th className="text-center text-gray-400 font-medium pb-3">Risk</th>
+                  <th className="text-left text-gray-400 font-medium pb-3">
+                    Client IP
+                  </th>
+                  <th className="text-right text-gray-400 font-medium pb-3">
+                    Requests
+                  </th>
+                  <th className="text-right text-gray-400 font-medium pb-3">
+                    Error Rate
+                  </th>
+                  <th className="text-right text-gray-400 font-medium pb-3">
+                    Violations
+                  </th>
+                  <th className="text-right text-gray-400 font-medium pb-3">
+                    Last Seen
+                  </th>
+                  <th className="text-center text-gray-400 font-medium pb-3">
+                    Risk
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {clients.map((c, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr
+                    key={i}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                  >
                     <td className="py-3 text-white font-mono">{c.client}</td>
-                    <td className="py-3 text-gray-300 text-right">{c.requests.toLocaleString()}</td>
+                    <td className="py-3 text-gray-300 text-right">
+                      {c.requests.toLocaleString()}
+                    </td>
                     <td
                       className={cn(
                         "py-3 text-right font-medium",
-                        c.errorRate > 10 ? "text-red-400" : c.errorRate > 5 ? "text-amber-400" : "text-green-400",
+                        c.errorRate > 10
+                          ? "text-red-400"
+                          : c.errorRate > 5
+                            ? "text-amber-400"
+                            : "text-green-400",
                       )}
                     >
                       {c.errorRate}%
@@ -364,18 +444,34 @@ export function Analytics() {
                       <span
                         className={cn(
                           "font-medium",
-                          c.violations > 20 ? "text-red-400" : c.violations > 5 ? "text-amber-400" : "text-gray-400",
+                          c.violations > 20
+                            ? "text-red-400"
+                            : c.violations > 5
+                              ? "text-amber-400"
+                              : "text-gray-400",
                         )}
                       >
                         {c.violations}
                       </span>
                     </td>
-                    <td className="py-3 text-gray-400 text-right">{c.lastSeen}</td>
+                    <td className="py-3 text-gray-400 text-right">
+                      {c.lastSeen}
+                    </td>
                     <td className="py-3 text-center">
                       <Badge
-                        variant={c.suspicious ? "destructive" : c.violations > 10 ? "warning" : "success"}
+                        variant={
+                          c.suspicious
+                            ? "destructive"
+                            : c.violations > 10
+                              ? "warning"
+                              : "success"
+                        }
                       >
-                        {c.suspicious ? "High" : c.violations > 10 ? "Medium" : "Low"}
+                        {c.suspicious
+                          ? "High"
+                          : c.violations > 10
+                            ? "Medium"
+                            : "Low"}
                       </Badge>
                     </td>
                   </tr>
@@ -397,20 +493,43 @@ export function Analytics() {
                 <defs>
                   <linearGradient id="hourReq" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop
+                      offset="100%"
+                      stopColor="#10b981"
+                      stopOpacity={0.25}
+                    />
                   </linearGradient>
                   <linearGradient id="hourErr" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.25} />
+                    <stop
+                      offset="100%"
+                      stopColor="#ef4444"
+                      stopOpacity={0.25}
+                    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                <XAxis dataKey="hour" stroke="#666" tick={{ fill: "#888", fontSize: 10 }} interval={2} />
+                <XAxis
+                  dataKey="hour"
+                  stroke="#666"
+                  tick={{ fill: "#888", fontSize: 10 }}
+                  interval={2}
+                />
                 <YAxis stroke="#666" tick={{ fill: "#888", fontSize: 11 }} />
                 <Tooltip contentStyle={chartTooltipStyle} />
                 <Legend />
-                <Bar dataKey="requests" fill="url(#hourReq)" radius={[3, 3, 0, 0]} name="Requests" />
-                <Bar dataKey="errors" fill="url(#hourErr)" radius={[3, 3, 0, 0]} name="Errors" />
+                <Bar
+                  dataKey="requests"
+                  fill="url(#hourReq)"
+                  radius={[3, 3, 0, 0]}
+                  name="Requests"
+                />
+                <Bar
+                  dataKey="errors"
+                  fill="url(#hourErr)"
+                  radius={[3, 3, 0, 0]}
+                  name="Errors"
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -426,20 +545,31 @@ export function Analytics() {
               {topErrorEndpoints.map((ep, i) => (
                 <div key={i}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-white font-mono truncate max-w-[180px]" title={ep.endpoint}>
+                    <span
+                      className="text-sm text-white font-mono truncate max-w-[180px]"
+                      title={ep.endpoint}
+                    >
                       {ep.endpoint}
                     </span>
-                    <span className="text-xs text-red-400 font-semibold">{ep.errorCount} errors</span>
+                    <span className="text-xs text-red-400 font-semibold">
+                      {ep.errorCount} errors
+                    </span>
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-2">
                     <div
                       className="h-2 rounded-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500"
-                      style={{ width: `${(ep.errorCount / maxErrorCount) * 100}%` }}
+                      style={{
+                        width: `${(ep.errorCount / maxErrorCount) * 100}%`,
+                      }}
                     />
                   </div>
                   <div className="flex justify-between mt-1">
-                    <span className="text-xs text-gray-500">{ep.totalRequests.toLocaleString()} total</span>
-                    <span className="text-xs text-gray-500">{ep.errorRate}% error rate</span>
+                    <span className="text-xs text-gray-500">
+                      {ep.totalRequests.toLocaleString()} total
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {ep.errorRate}% error rate
+                    </span>
                   </div>
                 </div>
               ))}

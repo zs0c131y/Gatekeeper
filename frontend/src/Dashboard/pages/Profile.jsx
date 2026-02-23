@@ -89,7 +89,14 @@ async function compressAvatar(file) {
   return canvas.toDataURL("image/jpeg", 0.88);
 }
 
-function SettingToggle({ label, description, value, disabled, onChange, icon: Icon }) {
+function SettingToggle({
+  label,
+  description,
+  value,
+  disabled,
+  onChange,
+  icon: Icon,
+}) {
   return (
     <div className="w-full flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10 transition-colors text-left disabled:opacity-60">
       <div className="flex items-start gap-3">
@@ -305,7 +312,9 @@ export function Profile() {
       setAvatarPreview(avatarDataUrl);
       await updateAvatar({ avatarDataUrl });
     } catch (err) {
-      setAvatarError(err?.response?.data?.error || err.message || "Unable to upload avatar.");
+      setAvatarError(
+        err?.response?.data?.error || err.message || "Unable to upload avatar.",
+      );
       setAvatarPreview(user?.avatarDataUrl || "");
     } finally {
       setAvatarUploading(false);
@@ -345,7 +354,9 @@ export function Profile() {
                 </div>
               )}
               <div>
-                <h1 className="text-2xl font-bold text-white">Profile Center</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  Profile Center
+                </h1>
                 <p className="text-gray-300">
                   Manage account identity, security controls, and dashboard
                   preferences.
@@ -362,10 +373,14 @@ export function Profile() {
               </div>
               <div className="rounded-lg border border-white/10 bg-black/30 px-4 py-3">
                 <p className="text-xs uppercase text-gray-500">Last Login</p>
-                <p className="text-sm font-semibold text-white">{lastLoginText}</p>
+                <p className="text-sm font-semibold text-white">
+                  {lastLoginText}
+                </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/30 px-4 py-3">
-                <p className="text-xs uppercase text-gray-500">Account Status</p>
+                <p className="text-xs uppercase text-gray-500">
+                  Account Status
+                </p>
                 <p className="text-sm font-semibold text-green-300">Healthy</p>
               </div>
             </div>
@@ -415,7 +430,9 @@ export function Profile() {
                     Remove
                   </Button>
                 </div>
-                {avatarError && <p className="text-xs text-red-400">{avatarError}</p>}
+                {avatarError && (
+                  <p className="text-xs text-red-400">{avatarError}</p>
+                )}
               </div>
 
               <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -605,7 +622,7 @@ export function Profile() {
                   className="bg-white/5 border-white/10 text-white focus-visible:ring-amber-500/60 focus-visible:ring-offset-0"
                 />
 
-                  <div className="space-y-2">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-400">Strength</span>
                     <span
@@ -623,9 +640,13 @@ export function Profile() {
                   <Progress
                     value={(strength.score / 5) * 100}
                     indicatorClassName={cn(
-                      strength.score <= 2 && "bg-red-500 from-red-500 to-red-400",
-                      strength.score > 2 && strength.score <= 4 && "bg-amber-500 from-amber-500 to-amber-400",
-                      strength.score > 4 && "bg-green-500 from-green-500 to-emerald-400",
+                      strength.score <= 2 &&
+                        "bg-red-500 from-red-500 to-red-400",
+                      strength.score > 2 &&
+                        strength.score <= 4 &&
+                        "bg-amber-500 from-amber-500 to-amber-400",
+                      strength.score > 4 &&
+                        "bg-green-500 from-green-500 to-emerald-400",
                     )}
                   />
                 </div>
@@ -657,15 +678,21 @@ export function Profile() {
               <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
                 <Clock3 className="w-4 h-4 text-amber-300" />
                 <div>
-                  <p className="text-sm text-white font-medium">Last authenticated</p>
+                  <p className="text-sm text-white font-medium">
+                    Last authenticated
+                  </p>
                   <p className="text-xs text-gray-400">{lastLoginText}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
                 <ShieldCheck className="w-4 h-4 text-green-300" />
                 <div>
-                  <p className="text-sm text-white font-medium">Active protection</p>
-                  <p className="text-xs text-gray-400">JWT revocation and refresh policies active.</p>
+                  <p className="text-sm text-white font-medium">
+                    Active protection
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    JWT revocation and refresh policies active.
+                  </p>
                 </div>
               </div>
               <Button

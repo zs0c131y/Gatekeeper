@@ -51,7 +51,9 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 group-hover:shadow-amber-500/40 transition-shadow">
               <Zap className="w-6 h-6 text-black" />
             </div>
-            <span className="text-2xl font-bold text-white group-hover:text-amber-50 transition-colors">Gatekeeper</span>
+            <span className="text-2xl font-bold text-white group-hover:text-amber-50 transition-colors">
+              Gatekeeper
+            </span>
           </a>
           <h1 className="text-xl font-semibold text-white">
             Sign in to dashboard
@@ -66,7 +68,10 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-300">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-gray-300"
+              >
                 Email
               </Label>
               <div className="relative">
@@ -82,7 +87,8 @@ export default function Login() {
                   disabled={loading}
                   className={cn(
                     "pl-10",
-                    formError && "border-red-500/50 focus-visible:ring-red-500/30",
+                    formError &&
+                      "border-red-500/50 focus-visible:ring-red-500/30",
                   )}
                 />
               </div>
@@ -90,7 +96,10 @@ export default function Login() {
 
             {/* Password */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-300">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-300"
+              >
                 Password
               </Label>
               <div className="relative">
@@ -106,7 +115,8 @@ export default function Login() {
                   disabled={loading}
                   className={cn(
                     "pl-10 pr-10",
-                    formError && "border-red-500/50 focus-visible:ring-red-500/30",
+                    formError &&
+                      "border-red-500/50 focus-visible:ring-red-500/30",
                   )}
                 />
                 <button

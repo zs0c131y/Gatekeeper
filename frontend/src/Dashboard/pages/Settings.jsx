@@ -60,7 +60,11 @@ function SaveToast({ status }) {
         status === "error" && "bg-red-500 text-white",
       )}
     >
-      {status === "success" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+      {status === "success" ? (
+        <CheckCircle className="w-4 h-4" />
+      ) : (
+        <XCircle className="w-4 h-4" />
+      )}
       <span>
         {status === "saving" && "Saving..."}
         {status === "success" && "Saved"}
@@ -110,7 +114,9 @@ export function Settings() {
           <h1 className="text-3xl font-bold text-white mb-1 bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
             Configuration
           </h1>
-          <p className="text-gray-400 text-sm">Manage your gateway settings and preferences</p>
+          <p className="text-gray-400 text-sm">
+            Manage your gateway settings and preferences
+          </p>
         </div>
       </div>
 
@@ -141,13 +147,20 @@ export function Settings() {
         ) : (
           <>
             {activeTab === "general" && (
-              <GeneralTab settings={settingsData} onSave={(payload) => withSaveStatus(() => api.updateGeneralSettings(payload))} />
+              <GeneralTab
+                settings={settingsData}
+                onSave={(payload) =>
+                  withSaveStatus(() => api.updateGeneralSettings(payload))
+                }
+              />
             )}
 
             {activeTab === "ratelimiting" && (
               <RateLimitingTab
                 settings={settingsData}
-                onSave={(payload) => withSaveStatus(() => api.updateRateLimitingSettings(payload))}
+                onSave={(payload) =>
+                  withSaveStatus(() => api.updateRateLimitingSettings(payload))
+                }
               />
             )}
 
@@ -155,7 +168,11 @@ export function Settings() {
               <CircuitBreakersTab
                 settings={settingsData}
                 backends={backendsData?.backends || []}
-                onSave={(payload) => withSaveStatus(() => api.updateCircuitBreakerSettings(payload))}
+                onSave={(payload) =>
+                  withSaveStatus(() =>
+                    api.updateCircuitBreakerSettings(payload),
+                  )
+                }
               />
             )}
 
@@ -165,20 +182,27 @@ export function Settings() {
               ) : backendsError ? (
                 <ErrorMessage error={backendsError} onRetry={refetchBackends} />
               ) : (
-                <BackendsTab backends={backendsData?.backends || []} refetch={refetchBackends} />
+                <BackendsTab
+                  backends={backendsData?.backends || []}
+                  refetch={refetchBackends}
+                />
               ))}
 
             {activeTab === "security" && (
               <SecurityTab
                 settings={settingsData}
-                onSave={(payload) => withSaveStatus(() => api.updateSecuritySettings(payload))}
+                onSave={(payload) =>
+                  withSaveStatus(() => api.updateSecuritySettings(payload))
+                }
               />
             )}
 
             {activeTab === "alerts" && (
               <AlertsTab
                 settings={settingsData}
-                onSave={(payload) => withSaveStatus(() => api.updateAlertSettings(payload))}
+                onSave={(payload) =>
+                  withSaveStatus(() => api.updateAlertSettings(payload))
+                }
               />
             )}
           </>
@@ -212,14 +236,21 @@ function GeneralTab({ settings, onSave }) {
           <Label className="text-gray-300">Gateway Name</Label>
           <Input
             value={form.gatewayName}
-            onChange={(e) => setForm((f) => ({ ...f, gatewayName: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, gatewayName: e.target.value }))
+            }
             className="bg-white/5 border-white/10 text-white"
           />
         </div>
 
         <div className="space-y-2">
           <Label className="text-gray-300">Logging Level</Label>
-          <Select value={form.loggingLevel} onValueChange={(value) => setForm((f) => ({ ...f, loggingLevel: value }))}>
+          <Select
+            value={form.loggingLevel}
+            onValueChange={(value) =>
+              setForm((f) => ({ ...f, loggingLevel: value }))
+            }
+          >
             <SelectTrigger className="bg-white/5 border-white/10 text-white focus:ring-amber-500/50 focus:ring-offset-0">
               <SelectValue placeholder="Select logging level" />
             </SelectTrigger>
@@ -237,7 +268,12 @@ function GeneralTab({ settings, onSave }) {
           <Input
             type="number"
             value={form.logRetentionDays}
-            onChange={(e) => setForm((f) => ({ ...f, logRetentionDays: Number(e.target.value) }))}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                logRetentionDays: Number(e.target.value),
+              }))
+            }
             className="bg-white/5 border-white/10 text-white"
           />
         </div>
@@ -261,7 +297,10 @@ function GeneralTab({ settings, onSave }) {
         />
       </div>
 
-      <Button onClick={() => onSave(form)} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+      <Button
+        onClick={() => onSave(form)}
+        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+      >
         <Save className="w-4 h-4" />
         Save General Settings
       </Button>
@@ -293,7 +332,12 @@ function RateLimitingTab({ settings, onSave }) {
           <Input
             type="number"
             value={global.requestsPerMinute}
-            onChange={(e) => setGlobal((g) => ({ ...g, requestsPerMinute: Number(e.target.value) }))}
+            onChange={(e) =>
+              setGlobal((g) => ({
+                ...g,
+                requestsPerMinute: Number(e.target.value),
+              }))
+            }
             className="bg-white/5 border-white/10 text-white"
           />
         </div>
@@ -303,7 +347,12 @@ function RateLimitingTab({ settings, onSave }) {
             type="number"
             step="0.1"
             value={global.burstMultiplier}
-            onChange={(e) => setGlobal((g) => ({ ...g, burstMultiplier: Number(e.target.value) }))}
+            onChange={(e) =>
+              setGlobal((g) => ({
+                ...g,
+                burstMultiplier: Number(e.target.value),
+              }))
+            }
             className="bg-white/5 border-white/10 text-white"
           />
         </div>
@@ -313,21 +362,31 @@ function RateLimitingTab({ settings, onSave }) {
         <ToggleCard
           label="Manual Override"
           checked={global.manualOverrideEnabled}
-          onChange={(v) => setGlobal((g) => ({ ...g, manualOverrideEnabled: v }))}
+          onChange={(v) =>
+            setGlobal((g) => ({ ...g, manualOverrideEnabled: v }))
+          }
         />
         <div className="space-y-2">
           <Label className="text-gray-300">Manual Override RPM</Label>
           <Input
             type="number"
             value={global.manualOverrideRpm}
-            onChange={(e) => setGlobal((g) => ({ ...g, manualOverrideRpm: Number(e.target.value) }))}
+            onChange={(e) =>
+              setGlobal((g) => ({
+                ...g,
+                manualOverrideRpm: Number(e.target.value),
+              }))
+            }
             className="bg-white/5 border-white/10 text-white"
             disabled={!global.manualOverrideEnabled}
           />
         </div>
       </div>
 
-      <Button onClick={() => onSave({ global })} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+      <Button
+        onClick={() => onSave({ global })}
+        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+      >
         <Save className="w-4 h-4" />
         Save Rate Limiting
       </Button>
@@ -356,38 +415,53 @@ function CircuitBreakersTab({ settings, backends, onSave }) {
         <Field
           label="Failure Threshold"
           value={form.failureThreshold}
-          onChange={(v) => setForm((f) => ({ ...f, failureThreshold: Number(v) }))}
+          onChange={(v) =>
+            setForm((f) => ({ ...f, failureThreshold: Number(v) }))
+          }
         />
         <Field
           label="Recovery Timeout (ms)"
           value={form.recoveryTimeoutMs}
-          onChange={(v) => setForm((f) => ({ ...f, recoveryTimeoutMs: Number(v) }))}
+          onChange={(v) =>
+            setForm((f) => ({ ...f, recoveryTimeoutMs: Number(v) }))
+          }
         />
         <Field
           label="Half-Open Max Calls"
           value={form.halfOpenMaxCalls}
-          onChange={(v) => setForm((f) => ({ ...f, halfOpenMaxCalls: Number(v) }))}
+          onChange={(v) =>
+            setForm((f) => ({ ...f, halfOpenMaxCalls: Number(v) }))
+          }
         />
       </div>
 
       <Card className="bg-white/5 border-white/10">
         <CardHeader>
-          <CardTitle className="text-white text-lg">Backend Runtime State</CardTitle>
+          <CardTitle className="text-white text-lg">
+            Backend Runtime State
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {backends.length ? (
             <div className="space-y-2">
               {backends.map((b) => (
-                <div key={b._id} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                <div
+                  key={b._id}
+                  className="flex items-center justify-between p-3 bg-black/20 rounded-lg"
+                >
                   <div>
                     <div className="text-white font-medium">{b.name}</div>
-                    <div className="text-xs text-gray-400">Health: {b.healthScore ?? "N/A"}</div>
+                    <div className="text-xs text-gray-400">
+                      Health: {b.healthScore ?? "N/A"}
+                    </div>
                   </div>
                   <Badge
                     variant={
-                      b.circuitState === "CLOSED" ? "success"
-                      : b.circuitState === "OPEN" ? "destructive"
-                      : "warning"
+                      b.circuitState === "CLOSED"
+                        ? "success"
+                        : b.circuitState === "OPEN"
+                          ? "destructive"
+                          : "warning"
                     }
                   >
                     {b.circuitState || "CLOSED"}
@@ -401,7 +475,10 @@ function CircuitBreakersTab({ settings, backends, onSave }) {
         </CardContent>
       </Card>
 
-      <Button onClick={() => onSave(form)} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+      <Button
+        onClick={() => onSave(form)}
+        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+      >
         <Save className="w-4 h-4" />
         Save Circuit Breaker Settings
       </Button>
@@ -434,25 +511,44 @@ function BackendsTab({ backends, refetch }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">Backend Services</h2>
-        <Button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+        <Button
+          onClick={() => setShowModal(true)}
+          className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+        >
           <Plus className="w-4 h-4" />
           Add Backend
         </Button>
       </div>
 
       {backends.length === 0 ? (
-        <EmptyState message="No backend services configured" description="Add your first backend service" icon="server" />
+        <EmptyState
+          message="No backend services configured"
+          description="Add your first backend service"
+          icon="server"
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {backends.map((backend) => (
-            <Card key={backend._id} className="bg-white/5 border-white/10 hover:border-amber-500/20 transition-colors">
+            <Card
+              key={backend._id}
+              className="bg-white/5 border-white/10 hover:border-amber-500/20 transition-colors"
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <CardTitle className="text-lg text-white truncate">{backend.name}</CardTitle>
-                    <div className="text-sm text-gray-400 font-mono truncate">{backend.url || backend.base_url}</div>
+                    <CardTitle className="text-lg text-white truncate">
+                      {backend.name}
+                    </CardTitle>
+                    <div className="text-sm text-gray-400 font-mono truncate">
+                      {backend.url || backend.base_url}
+                    </div>
                   </div>
-                  <Badge variant={backend.isActive !== false ? "success" : "destructive"} className="shrink-0">
+                  <Badge
+                    variant={
+                      backend.isActive !== false ? "success" : "destructive"
+                    }
+                    className="shrink-0"
+                  >
                     {backend.isActive !== false ? "Active" : "Inactive"}
                   </Badge>
                 </div>
@@ -460,7 +556,9 @@ function BackendsTab({ backends, refetch }) {
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Health Path</span>
-                  <span className="text-white">{backend.healthPath || backend.health_endpoint}</span>
+                  <span className="text-white">
+                    {backend.healthPath || backend.health_endpoint}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Weight</span>
@@ -515,7 +613,8 @@ function BackendModal({ initial, onClose, onSubmit }) {
   const [form, setForm] = useState({
     name: initial?.name || "",
     base_url: initial?.url || initial?.base_url || "",
-    health_endpoint: initial?.healthPath || initial?.health_endpoint || "/health",
+    health_endpoint:
+      initial?.healthPath || initial?.health_endpoint || "/health",
     weight: initial?.weight || 1,
     timeout: initial?.timeout || 5000,
   });
@@ -537,21 +636,46 @@ function BackendModal({ initial, onClose, onSubmit }) {
           }}
           className="space-y-4"
         >
-          <Field label="Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} disabled={!!initial} />
-          <Field label="Base URL" value={form.base_url} onChange={(v) => setForm((f) => ({ ...f, base_url: v }))} />
+          <Field
+            label="Name"
+            value={form.name}
+            onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+            disabled={!!initial}
+          />
+          <Field
+            label="Base URL"
+            value={form.base_url}
+            onChange={(v) => setForm((f) => ({ ...f, base_url: v }))}
+          />
           <Field
             label="Health Endpoint"
             value={form.health_endpoint}
             onChange={(v) => setForm((f) => ({ ...f, health_endpoint: v }))}
           />
-          <Field label="Weight" value={form.weight} onChange={(v) => setForm((f) => ({ ...f, weight: Number(v) }))} />
-          <Field label="Timeout (ms)" value={form.timeout} onChange={(v) => setForm((f) => ({ ...f, timeout: Number(v) }))} />
+          <Field
+            label="Weight"
+            value={form.weight}
+            onChange={(v) => setForm((f) => ({ ...f, weight: Number(v) }))}
+          />
+          <Field
+            label="Timeout (ms)"
+            value={form.timeout}
+            onChange={(v) => setForm((f) => ({ ...f, timeout: Number(v) }))}
+          />
 
           <div className="flex gap-2 pt-2">
-            <Button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+            <Button
+              type="submit"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+            >
               {initial ? "Update" : "Create"}
             </Button>
-            <Button type="button" onClick={onClose} variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white">
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="outline"
+              className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+            >
               Cancel
             </Button>
           </div>
@@ -568,7 +692,12 @@ function SecurityTab({ settings, onSave }) {
   });
   const [copied, setCopied] = useState(null);
   const [showCreateKey, setShowCreateKey] = useState(false);
-  const [newKey, setNewKey] = useState({ name: "", clientId: "", scopes: "", rateLimit: "" });
+  const [newKey, setNewKey] = useState({
+    name: "",
+    clientId: "",
+    scopes: "",
+    rateLimit: "",
+  });
   const [createdKey, setCreatedKey] = useState(null);
 
   const {
@@ -606,7 +735,10 @@ function SecurityTab({ settings, onSave }) {
         />
       </div>
 
-      <Button onClick={() => onSave(form)} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+      <Button
+        onClick={() => onSave(form)}
+        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+      >
         <Save className="w-4 h-4" />
         Save Security Settings
       </Button>
@@ -617,7 +749,10 @@ function SecurityTab({ settings, onSave }) {
             <Key className="w-5 h-5 text-amber-400" />
             API Keys
           </CardTitle>
-          <Button onClick={() => setShowCreateKey(true)} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+          <Button
+            onClick={() => setShowCreateKey(true)}
+            className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+          >
             <Plus className="w-4 h-4" />
             Create Key
           </Button>
@@ -631,12 +766,19 @@ function SecurityTab({ settings, onSave }) {
             <EmptyState message="No API keys" icon="key" />
           ) : (
             safeKeys.map((k) => (
-              <div key={k._id || k.id} className="p-4 bg-black/20 border border-white/10 rounded-lg">
+              <div
+                key={k._id || k.id}
+                className="p-4 bg-black/20 border border-white/10 rounded-lg"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-white font-medium">{k.name}</div>
-                    <div className="text-xs text-gray-400 font-mono">{k.keyPrefix || k.prefix}</div>
-                    <div className="text-xs text-gray-500">Client: {k.clientId}</div>
+                    <div className="text-xs text-gray-400 font-mono">
+                      {k.keyPrefix || k.prefix}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Client: {k.clientId}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -676,7 +818,9 @@ function SecurityTab({ settings, onSave }) {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <code className="text-white font-mono text-sm break-all">{createdKey.rawKey}</code>
+              <code className="text-white font-mono text-sm break-all">
+                {createdKey.rawKey}
+              </code>
               <Button
                 type="button"
                 variant="ghost"
@@ -690,18 +834,33 @@ function SecurityTab({ settings, onSave }) {
               >
                 <Copy className="w-4 h-4 text-gray-300" />
               </Button>
-              {copied === createdKey.rawKey && <span className="text-xs text-green-400">Copied</span>}
+              {copied === createdKey.rawKey && (
+                <span className="text-xs text-green-400">Copied</span>
+              )}
             </div>
-            <p className="text-xs text-gray-400 mt-2">Store this key now. It will not be shown again.</p>
+            <p className="text-xs text-gray-400 mt-2">
+              Store this key now. It will not be shown again.
+            </p>
           </CardContent>
         </Card>
       )}
 
       {showCreateKey && (
-        <SimpleModal title="Create API Key" onClose={() => setShowCreateKey(false)}>
+        <SimpleModal
+          title="Create API Key"
+          onClose={() => setShowCreateKey(false)}
+        >
           <div className="space-y-3">
-            <Field label="Name" value={newKey.name} onChange={(v) => setNewKey((k) => ({ ...k, name: v }))} />
-            <Field label="Client ID" value={newKey.clientId} onChange={(v) => setNewKey((k) => ({ ...k, clientId: v }))} />
+            <Field
+              label="Name"
+              value={newKey.name}
+              onChange={(v) => setNewKey((k) => ({ ...k, name: v }))}
+            />
+            <Field
+              label="Client ID"
+              value={newKey.clientId}
+              onChange={(v) => setNewKey((k) => ({ ...k, clientId: v }))}
+            />
             <Field
               label="Scopes (comma-separated)"
               value={newKey.scopes}
@@ -721,14 +880,24 @@ function SecurityTab({ settings, onSave }) {
                     name: newKey.name,
                     clientId: newKey.clientId,
                     scopes: newKey.scopes
-                      ? newKey.scopes.split(",").map((s) => s.trim()).filter(Boolean)
+                      ? newKey.scopes
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean)
                       : [],
-                    rateLimit: newKey.rateLimit ? Number(newKey.rateLimit) : undefined,
+                    rateLimit: newKey.rateLimit
+                      ? Number(newKey.rateLimit)
+                      : undefined,
                   };
                   const created = await api.createApiKey(payload);
                   setCreatedKey(created);
                   setShowCreateKey(false);
-                  setNewKey({ name: "", clientId: "", scopes: "", rateLimit: "" });
+                  setNewKey({
+                    name: "",
+                    clientId: "",
+                    scopes: "",
+                    rateLimit: "",
+                  });
                   refetchKeys();
                 }}
               >
@@ -765,16 +934,23 @@ function AlertsTab({ settings, onSave }) {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">Alert Rules</h2>
-      <p className="text-sm text-gray-400">Configure alert rules and delivery channels.</p>
+      <p className="text-sm text-gray-400">
+        Configure alert rules and delivery channels.
+      </p>
 
       <div className="space-y-3">
         {rules.map((rule, i) => (
-          <div key={rule.name} className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+          <div
+            key={rule.name}
+            className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10"
+          >
             <span className="text-white">{rule.name}</span>
             <Switch
               checked={rule.enabled}
               onCheckedChange={(v) =>
-                setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, enabled: v } : r)))
+                setRules((prev) =>
+                  prev.map((r, idx) => (idx === i ? { ...r, enabled: v } : r)),
+                )
               }
               className="data-[state=checked]:bg-amber-500"
             />
@@ -802,7 +978,11 @@ function ToggleCard({ label, checked, onChange }) {
   return (
     <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/10 rounded-xl">
       <Label className="text-white font-medium">{label}</Label>
-      <Switch checked={checked} onCheckedChange={onChange} className="data-[state=checked]:bg-amber-500" />
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        className="data-[state=checked]:bg-amber-500"
+      />
     </div>
   );
 }
