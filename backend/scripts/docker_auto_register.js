@@ -24,6 +24,10 @@ async function autoRegister() {
                     baseUrl: server.baseUrl,
                     isActive: true
                 });
+            } else {
+                backend.baseUrl = server.baseUrl;
+                backend.isActive = true;
+                await backend.save();
             }
 
             const routePath = `${server.prefix}/*`;

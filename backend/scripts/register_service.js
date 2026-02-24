@@ -24,19 +24,30 @@ async function registerGatewayService() {
 
     try {
         // Collect Inputs
-        const name = await askQuestion('Enter Service Name (e.g., "Auth Service", "Temp Server 1"): ');
-        if (!name.trim()) throw new Error('Service Name is required.');
+        let name, baseUrl, routePath, stripPrefix, requiresAuth;
 
-        const baseUrl = await askQuestion('Enter Base URL (e.g., "http://localhost:3001", "http://temp:3000"): ');
-        if (!baseUrl.trim()) throw new Error('Base URL is required.');
+        if (process.argv.length >= 7) {
+            name = process.argv[2];
+            baseUrl = process.argv[3];
+            routePath = process.argv[4];
+            stripPrefix = process.argv[5];
+            requiresAuth = process.argv[6].trim().toLowerCase() === 'y';
+            console.log(`Using provided arguments: ${name}, ${baseUrl}, ${routePath}, ${stripPrefix}, ${process.argv[6]}`);
+        } else {
+            name = await askQuestion('Enter Service Name (e.g., "Auth Service", "Temp Server 1"): ');
+            if (!name.trim()) throw new Error('Service Name is required.');
 
-        const routePath = await askQuestion('Enter Route Path match (e.g., "/auth/*", "/temp1/*"): ');
-        if (!routePath.trim()) throw new Error('Route Path is required.');
+            baseUrl = await askQuestion('Enter Base URL (e.g., "http://localhost:3001", "http://temp:3000"): ');
+            if (!baseUrl.trim()) throw new Error('Base URL is required.');
 
-        const stripPrefix = await askQuestion('Enter Route Prefix to strip before forwarding (e.g., "/auth", "/temp1" or leave empty to strip nothing): ');
+            routePath = await askQuestion('Enter Route Path match (e.g., "/auth/*", "/temp1/*"): ');
+            if (!routePath.trim()) throw new Error('Route Path is required.');
 
-        const requiresAuthInput = await askQuestion('Does this route require Authentication? (y/N): ');
-        const requiresAuth = requiresAuthInput.trim().toLowerCase() === 'y';
+            stripPrefix = await askQuestion('Enter Route Prefix to strip before forwarding (e.g., "/auth", "/temp1" or leave empty to strip nothing): ');
+
+            const requiresAuthInput = await askQuestion('Does this route require Authentication? (y/N): ');
+            requiresAuth = requiresAuthInput.trim().toLowerCase() === 'y';
+        }
 
         console.log('\nConnecting to MongoDB...');
         await mongoose.connect(uri);
