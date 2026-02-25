@@ -22,7 +22,8 @@ const router = Router();
 
 function asObjectIdMaybe(value) {
   if (!value) return null;
-  if (mongoose.Types.ObjectId.isValid(value)) return new mongoose.Types.ObjectId(value);
+  if (mongoose.Types.ObjectId.isValid(value))
+    return new mongoose.Types.ObjectId(value);
   return null;
 }
 
@@ -45,7 +46,7 @@ async function upsertConfig(key, value, updatedBy) {
   await Config.findOneAndUpdate(
     { key },
     { value, updatedBy },
-    { upsert: true, new: true, runValidators: false },
+    { upsert: true, returnDocument: "after", runValidators: false },
   );
   invalidateConfigDependents(key);
 }
@@ -68,7 +69,8 @@ async function getRateLimitingSettings() {
     global: {
       requestsPerMinute: m["rate_limiting.default_rpm"] ?? 100,
       burstMultiplier: m["rate_limiting.burst_multiplier"] ?? 1.5,
-      manualOverrideEnabled: m["rate_limiting.manual_override_enabled"] ?? false,
+      manualOverrideEnabled:
+        m["rate_limiting.manual_override_enabled"] ?? false,
       manualOverrideRpm: m["rate_limiting.manual_override_rpm"] ?? 0,
     },
   };
@@ -171,10 +173,18 @@ async function updateGeneral(payload, updatedBy) {
 async function updateRateLimiting(payload, updatedBy) {
   const global = payload.global || payload;
   if (global.requestsPerMinute !== undefined) {
-    await upsertConfig("rate_limiting.default_rpm", global.requestsPerMinute, updatedBy);
+    await upsertConfig(
+      "rate_limiting.default_rpm",
+      global.requestsPerMinute,
+      updatedBy,
+    );
   }
   if (global.burstMultiplier !== undefined) {
-    await upsertConfig("rate_limiting.burst_multiplier", global.burstMultiplier, updatedBy);
+    await upsertConfig(
+      "rate_limiting.burst_multiplier",
+      global.burstMultiplier,
+      updatedBy,
+    );
   }
   if (global.manualOverrideEnabled !== undefined) {
     await upsertConfig(
@@ -184,7 +194,11 @@ async function updateRateLimiting(payload, updatedBy) {
     );
   }
   if (global.manualOverrideRpm !== undefined) {
-    await upsertConfig("rate_limiting.manual_override_rpm", global.manualOverrideRpm, updatedBy);
+    await upsertConfig(
+      "rate_limiting.manual_override_rpm",
+      global.manualOverrideRpm,
+      updatedBy,
+    );
   }
 }
 
@@ -207,7 +221,11 @@ async function updateSecurity(payload, updatedBy) {
     await upsertConfig("security.jwt_expiry", payload.jwtExpiry, updatedBy);
   }
   if (payload.apiKeyHeader !== undefined) {
-    await upsertConfig("security.api_key_header", payload.apiKeyHeader, updatedBy);
+    await upsertConfig(
+      "security.api_key_header",
+      payload.apiKeyHeader,
+      updatedBy,
+    );
   }
 }
 
@@ -231,14 +249,19 @@ router.get("/general", async (_req, res, next) => {
   }
 });
 
-router.put("/general", requireJWT, requireRole("admin"), async (req, res, next) => {
-  try {
-    await updateGeneral(req.body, req.user?.userId || "system");
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
+router.put(
+  "/general",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      await updateGeneral(req.body, req.user?.userId || "system");
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 router.get("/rate-limiting", async (_req, res, next) => {
   try {
@@ -293,31 +316,36 @@ router.get("/backends", async (_req, res, next) => {
   }
 });
 
-router.post("/backends", requireJWT, requireRole("admin"), async (req, res, next) => {
-  try {
-    const name = req.body.name;
-    const url = req.body.url || req.body.base_url;
-    const healthPath = req.body.healthPath || req.body.health_endpoint;
-    const weight = req.body.weight;
-    const timeout = req.body.timeout;
+router.post(
+  "/backends",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const name = req.body.name;
+      const url = req.body.url || req.body.base_url;
+      const healthPath = req.body.healthPath || req.body.health_endpoint;
+      const weight = req.body.weight;
+      const timeout = req.body.timeout;
 
-    if (!name || !url) {
-      return res.status(400).json({ error: "name and url are required" });
+      if (!name || !url) {
+        return res.status(400).json({ error: "name and url are required" });
+      }
+
+      const backend = await Backend.create({
+        name,
+        baseUrl: url,
+        healthCheckPath: healthPath || "/health",
+        weight: weight || 1,
+        timeout: timeout || 5000,
+      });
+
+      res.status(201).json(backend);
+    } catch (err) {
+      next(err);
     }
-
-    const backend = await Backend.create({
-      name,
-      baseUrl: url,
-      healthCheckPath: healthPath || "/health",
-      weight: weight || 1,
-      timeout: timeout || 5000,
-    });
-
-    res.status(201).json(backend);
-  } catch (err) {
-    next(err);
-  }
-});
+  },
+);
 
 router.put(
   "/backends/:nameOrId",
@@ -328,7 +356,15 @@ router.put(
       const { nameOrId } = req.params;
       const id = asObjectIdMaybe(nameOrId);
 
-      const { url, base_url, healthPath, health_endpoint, weight, timeout, isActive } = req.body;
+      const {
+        url,
+        base_url,
+        healthPath,
+        health_endpoint,
+        weight,
+        timeout,
+        isActive,
+      } = req.body;
       const update = {};
 
       if (url !== undefined || base_url !== undefined) {
@@ -342,7 +378,9 @@ router.put(
       if (isActive !== undefined) update.isActive = isActive;
 
       const query = id ? { _id: id } : { name: nameOrId };
-      const updated = await Backend.findOneAndUpdate(query, update, { new: true });
+      const updated = await Backend.findOneAndUpdate(query, update, {
+        returnDocument: "after",
+      });
       if (!updated) return res.status(404).json({ error: "Backend not found" });
 
       res.json(updated);
@@ -380,14 +418,19 @@ router.get("/security", async (_req, res, next) => {
   }
 });
 
-router.put("/security", requireJWT, requireRole("admin"), async (req, res, next) => {
-  try {
-    await updateSecurity(req.body, req.user?.userId || "system");
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
+router.put(
+  "/security",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      await updateSecurity(req.body, req.user?.userId || "system");
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 router.get("/alerts", async (_req, res, next) => {
   try {
@@ -397,18 +440,25 @@ router.get("/alerts", async (_req, res, next) => {
   }
 });
 
-router.put("/alerts", requireJWT, requireRole("admin"), async (req, res, next) => {
-  try {
-    await updateAlerts(req.body, req.user?.userId || "system");
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
+router.put(
+  "/alerts",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      await updateAlerts(req.body, req.user?.userId || "system");
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 router.get("/api-keys", requireJWT, async (_req, res, next) => {
   try {
-    const keys = await ApiKey.find({ isActive: true }).select("-keyHash").lean();
+    const keys = await ApiKey.find({ isActive: true })
+      .select("-keyHash")
+      .lean();
     res.json(
       keys.map((k) => ({
         id: k._id,
@@ -429,15 +479,21 @@ router.get("/api-keys", requireJWT, async (_req, res, next) => {
 // Aggregate settings for dashboard UI.
 router.get("/", async (_req, res, next) => {
   try {
-    const [general, rateLimiting, circuitBreaker, security, alerts, backendPayload] =
-      await Promise.all([
-        getGeneralSettings(),
-        getRateLimitingSettings(),
-        getCircuitBreakerSettings(),
-        getSecuritySettings(),
-        getAlertSettings(),
-        getBackendsView(),
-      ]);
+    const [
+      general,
+      rateLimiting,
+      circuitBreaker,
+      security,
+      alerts,
+      backendPayload,
+    ] = await Promise.all([
+      getGeneralSettings(),
+      getRateLimitingSettings(),
+      getCircuitBreakerSettings(),
+      getSecuritySettings(),
+      getAlertSettings(),
+      getBackendsView(),
+    ]);
 
     // Keep legacy maps as compatibility payload.
     const [generalMap, rlMap, cbMap] = await Promise.all([
@@ -473,7 +529,8 @@ router.put("/", requireJWT, requireRole("admin"), async (req, res, next) => {
     await updateGeneral(generalPayload, by);
 
     if (body.rateLimiting) await updateRateLimiting(body.rateLimiting, by);
-    if (body.circuitBreaker) await updateCircuitBreaker(body.circuitBreaker, by);
+    if (body.circuitBreaker)
+      await updateCircuitBreaker(body.circuitBreaker, by);
     if (body.security) await updateSecurity(body.security, by);
     if (body.alerts) await updateAlerts(body.alerts, by);
 

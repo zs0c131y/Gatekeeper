@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const logSchema = new mongoose.Schema(
   {
@@ -37,15 +37,15 @@ const logSchema = new mongoose.Schema(
     },
     backendId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Backend',
+      ref: "Backend",
     },
     apiKeyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ApiKey',
+      ref: "ApiKey",
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
     },
     errorMessage: {
       type: String,
@@ -57,12 +57,11 @@ const logSchema = new mongoose.Schema(
       type: Number,
     },
   },
-  { timestamps: false }
+  { timestamps: false },
 );
 
-logSchema.index({ traceId: 1 }, { unique: true });
 logSchema.index({ timestamp: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 logSchema.index({ clientIp: 1 });
 logSchema.index({ status: 1 });
 
-module.exports = mongoose.model('Log', logSchema);
+module.exports = mongoose.model("Log", logSchema);

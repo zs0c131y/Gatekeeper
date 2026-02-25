@@ -35,15 +35,20 @@ async function aggregatePeriod(period, bucketStart, bucketEnd) {
     .lean();
 
   const totalRequests = logs.length;
-  const successCount = logs.filter((l) => l.status >= 200 && l.status < 400).length;
+  const successCount = logs.filter(
+    (l) => l.status >= 200 && l.status < 400,
+  ).length;
   const errorCount = totalRequests - successCount;
 
-  const latencies = logs.map((l) => Number(l.latency || 0)).sort((a, b) => a - b);
+  const latencies = logs
+    .map((l) => Number(l.latency || 0))
+    .sort((a, b) => a - b);
   const avgLatency = totalRequests
     ? Math.round(latencies.reduce((sum, v) => sum + v, 0) / totalRequests)
     : 0;
 
-  const throughput = totalRequests / Math.max(1, (bucketEnd - bucketStart) / 1000);
+  const throughput =
+    totalRequests / Math.max(1, (bucketEnd - bucketStart) / 1000);
 
   await Analytics.findOneAndUpdate(
     { period, timestamp: bucketStart },
@@ -59,7 +64,7 @@ async function aggregatePeriod(period, bucketStart, bucketEnd) {
       p99Latency: percentile(latencies, 99),
       throughput: Number(throughput.toFixed(3)),
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   );
 }
 
@@ -70,9 +75,21 @@ async function runAnalyticsAggregation() {
   const dayStart = floorToDay(now);
 
   await Promise.allSettled([
-    aggregatePeriod("minute", minuteStart, new Date(minuteStart.getTime() + 60_000)),
-    aggregatePeriod("hour", hourStart, new Date(hourStart.getTime() + 60 * 60_000)),
-    aggregatePeriod("day", dayStart, new Date(dayStart.getTime() + 24 * 60 * 60_000)),
+    aggregatePeriod(
+      "minute",
+      minuteStart,
+      new Date(minuteStart.getTime() + 60_000),
+    ),
+    aggregatePeriod(
+      "hour",
+      hourStart,
+      new Date(hourStart.getTime() + 60 * 60_000),
+    ),
+    aggregatePeriod(
+      "day",
+      dayStart,
+      new Date(dayStart.getTime() + 24 * 60 * 60_000),
+    ),
   ]);
 }
 
