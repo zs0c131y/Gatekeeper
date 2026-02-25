@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const clientProfileSchema = new mongoose.Schema(
   {
@@ -10,7 +10,7 @@ const clientProfileSchema = new mongoose.Schema(
     clientType: {
       type: String,
       required: true,
-      enum: ['ip', 'apikey'],
+      enum: ["ip", "apikey"],
     },
     totalRequests: {
       type: Number,
@@ -40,9 +40,7 @@ const clientProfileSchema = new mongoose.Schema(
       type: String,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-clientProfileSchema.index({ clientId: 1 }, { unique: true });
-
-module.exports = mongoose.model('ClientProfile', clientProfileSchema);
+module.exports = mongoose.model("ClientProfile", clientProfileSchema);

@@ -286,7 +286,7 @@ router.patch("/alerts/:id/read", requireJWT, async (req, res, next) => {
     const updated = await Alert.findByIdAndUpdate(
       req.params.id,
       { isRead: true },
-      { new: true },
+      { returnDocument: "after" },
     ).lean();
 
     if (!updated) {
@@ -341,10 +341,7 @@ router.get("/search", requireJWT, async (req, res, next) => {
         .sort({ updatedAt: -1 })
         .limit(20)
         .lean(),
-      Alert.find({ message: regex })
-        .sort({ createdAt: -1 })
-        .limit(20)
-        .lean(),
+      Alert.find({ message: regex }).sort({ createdAt: -1 }).limit(20).lean(),
     ]);
 
     const endpointMap = new Map();

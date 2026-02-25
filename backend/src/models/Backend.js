@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const backendSchema = new mongoose.Schema(
   {
@@ -13,7 +13,7 @@ const backendSchema = new mongoose.Schema(
     },
     healthCheckPath: {
       type: String,
-      default: '/health',
+      default: "/health",
     },
     isActive: {
       type: Boolean,
@@ -32,9 +32,7 @@ const backendSchema = new mongoose.Schema(
       type: [String],
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-backendSchema.index({ name: 1 }, { unique: true });
-
-module.exports = mongoose.model('Backend', backendSchema);
+module.exports = mongoose.model("Backend", backendSchema);
