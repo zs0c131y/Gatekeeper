@@ -1,4 +1,10 @@
 import express from "express";
+import dns from "dns";
+
+dns.setServers([
+    "8.8.8.8",
+    "1.1.1.1"
+]);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
