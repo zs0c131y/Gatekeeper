@@ -7,7 +7,10 @@ const Backend = require("../src/models/Backend");
 const Alert = require("../src/models/Alert");
 const { getRedisClient } = require("../src/config/database");
 const redisKeys = require("../src/config/redisKeys");
-const { scoreToStatus } = require("../src/services/healthCheck");
+const {
+  scoreToStatus,
+  getMemoryScore,
+} = require("../src/services/healthCheck");
 const { requireJWT } = require("../src/middleware/auth");
 
 const router = Router();
@@ -21,29 +24,103 @@ async function getCircuitStateRaw(redis, name) {
   return (await redis.get(redisKeys.circuitState(name))) || "CLOSED";
 }
 async function getHealthScoreRaw(redis, name) {
-  if (!redis) return null;
-  const v = await redis.get(redisKeys.healthScore(name));
-  return v === null ? null : parseInt(v, 10);
+  if (redis) {
+    const v = await redis.get(redisKeys.healthScore(name));
+    return v === null ? null : parseInt(v, 10);
+  }
+  // Redis unavailable — fall back to in-memory scores written by health check service.
+  return getMemoryScore(name);
+}
+
+// Build time-bucketed traffic data for the chart.
+// Returns `buckets` data points, each covering `intervalMs` milliseconds.
+function buildTrafficBuckets(logs, intervalMs = 60_000, buckets = 30) {
+  const now = Date.now();
+  const windowStart = now - buckets * intervalMs;
+  const counts = new Array(buckets).fill(0);
+
+  for (const log of logs) {
+    const ts = new Date(log.timestamp).getTime();
+    if (ts < windowStart) continue;
+    const idx = Math.floor((ts - windowStart) / intervalMs);
+    if (idx >= 0 && idx < buckets) counts[idx]++;
+  }
+
+  return counts.map((count, i) => ({
+    timestamp: windowStart + (i + 1) * intervalMs,
+    requests: count,
+  }));
+}
+
+function buildTopEndpoints(logs) {
+  const epMap = {};
+  for (const log of logs) {
+    const ep = log.endpoint;
+    if (!epMap[ep]) epMap[ep] = { endpoint: ep, count: 0, lSum: 0, errors: 0 };
+    epMap[ep].count++;
+    epMap[ep].lSum += log.latency || 0;
+    if (log.status >= 400) epMap[ep].errors++;
+  }
+  return Object.values(epMap)
+    .map((e) => ({
+      endpoint: e.endpoint,
+      requests: e.count,
+      avgLatency: Math.round(e.lSum / e.count),
+      errorRate: parseFloat(((e.errors / e.count) * 100).toFixed(1)),
+    }))
+    .sort((a, b) => b.requests - a.requests)
+    .slice(0, 10);
+}
+
+function computeMetrics(logs) {
+  const total = logs.length;
+  const errors = logs.filter((l) => l.status >= 400).length;
+  const avgLatency = total
+    ? Math.round(logs.reduce((s, l) => s + (l.latency || 0), 0) / total)
+    : 0;
+  const errorRate = total ? parseFloat(((errors / total) * 100).toFixed(1)) : 0;
+  return { total, avgLatency, errorRate };
 }
 
 // GET /api/overview
-router.get("/", async (_req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
     const redis = getRedisClient();
-    const recentLogs = await Log.find()
-      .sort({ timestamp: -1 })
-      .limit(100)
-      .lean();
+    const routesOnly = req.query.routesOnly === "true";
+    const sourceFilter = routesOnly ? { source: "gateway" } : {};
 
-    const errors = recentLogs.filter((l) => l.status >= 400).length;
-    const avgLatency = recentLogs.length
-      ? Math.round(
-          recentLogs.reduce((s, l) => s + l.latency, 0) / recentLogs.length,
-        )
-      : 0;
-    const errorRate = recentLogs.length
-      ? parseFloat(((errors / recentLogs.length) * 100).toFixed(1))
-      : 0;
+    const now = Date.now();
+    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+    const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000);
+
+    // Fetch current and previous hour in parallel for change comparison.
+    const [currentLogs, prevLogs] = await Promise.all([
+      Log.find({ ...sourceFilter, timestamp: { $gte: oneHourAgo } })
+        .sort({ timestamp: -1 })
+        .limit(20_000)
+        .lean(),
+      Log.find({
+        ...sourceFilter,
+        timestamp: { $gte: twoHoursAgo, $lt: oneHourAgo },
+      })
+        .sort({ timestamp: -1 })
+        .limit(20_000)
+        .lean(),
+    ]);
+
+    const cur = computeMetrics(currentLogs);
+    const prev = computeMetrics(prevLogs);
+
+    const sign = (n) => (n >= 0 ? "+" : "");
+    const requestsChange = prev.total
+      ? `${sign(cur.total - prev.total)}${cur.total - prev.total}`
+      : null;
+    const latencyChange = prev.avgLatency
+      ? `${sign(cur.avgLatency - prev.avgLatency)}${cur.avgLatency - prev.avgLatency}ms`
+      : null;
+    const errorRateChange = prev.total
+      ? `${sign(cur.errorRate - prev.errorRate)}${(cur.errorRate - prev.errorRate).toFixed(1)}%`
+      : null;
 
     const dbBackends = await Backend.find({ isActive: true }).lean();
     const backends = await Promise.all(
@@ -54,49 +131,27 @@ router.get("/", async (_req, res, next) => {
           name: b.name,
           status: scoreToStatus(score),
           circuitState,
-          healthScore: score ?? 100,
+          healthScore: score ?? 0,
         };
       }),
     );
+    // "active" = any backend that is responding (healthy or degraded).
+    // "unhealthy"/"unknown" = not reachable.
     const activeBackends = backends.filter(
-      (b) => b.status === "healthy",
+      (b) => b.status === "healthy" || b.status === "degraded",
     ).length;
 
-    const trafficData = recentLogs
-      .slice(0, 30)
-      .reverse()
-      .map((l) => ({
-        timestamp: new Date(l.timestamp).getTime(),
-        requests: 1,
-      }));
-
-    const epMap = {};
-    for (const log of recentLogs) {
-      const ep = log.endpoint;
-      if (!epMap[ep])
-        epMap[ep] = { endpoint: ep, count: 0, lSum: 0, errors: 0 };
-      epMap[ep].count++;
-      epMap[ep].lSum += log.latency || 0;
-      if (log.status >= 400) epMap[ep].errors++;
-    }
-    const topEndpoints = Object.values(epMap)
-      .map((e) => ({
-        endpoint: e.endpoint,
-        requests: e.count,
-        avgLatency: Math.round(e.lSum / e.count),
-        errorRate: parseFloat(((e.errors / e.count) * 100).toFixed(1)),
-      }))
-      .sort((a, b) => b.requests - a.requests)
-      .slice(0, 10);
-
     res.json({
-      totalRequests: recentLogs.length,
-      avgLatency,
-      errorRate,
+      totalRequests: cur.total,
+      avgLatency: cur.avgLatency,
+      errorRate: cur.errorRate,
+      requestsChange,
+      latencyChange,
+      errorRateChange,
       activeBackends,
       backends,
-      trafficData,
-      topEndpoints,
+      trafficData: buildTrafficBuckets(currentLogs),
+      topEndpoints: buildTopEndpoints(currentLogs),
     });
   } catch (err) {
     next(err);
@@ -155,7 +210,9 @@ router.get("/traffic", async (req, res, next) => {
 });
 
 // GET /api/overview/traffic/stream — SSE
-router.get("/traffic/stream", (_req, res) => {
+// Counts new logs since the last tick using a sliding cursor so we never miss
+// a log that lands between ticks or during a slow DB flush.
+router.get("/traffic/stream", (req, res) => {
   res.set({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -163,11 +220,21 @@ router.get("/traffic/stream", (_req, res) => {
     "X-Accel-Buffering": "no",
   });
   res.flushHeaders();
+
+  const routesOnly = req.query.routesOnly === "true";
+
+  // Start the cursor 2 seconds in the past to pick up any logs already flushed
+  // to DB that arrived just before the SSE connection was opened.
+  let cursor = new Date(Date.now() - 2000);
+
   const send = async () => {
     try {
-      const count = await Log.countDocuments({
-        timestamp: { $gte: new Date(Date.now() - 1000) },
-      });
+      const tickStart = new Date();
+      const filter = { timestamp: { $gte: cursor } };
+      if (routesOnly) filter.source = "gateway";
+      const count = await Log.countDocuments(filter);
+      // Advance cursor to now so the next tick only counts genuinely new logs.
+      cursor = tickStart;
       res.write(
         `data: ${JSON.stringify({ time: Date.now(), requests: count })}\n\n`,
       );

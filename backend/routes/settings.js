@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const Config = require("../src/models/Config");
 const Backend = require("../src/models/Backend");
 const ApiKey = require("../src/models/ApiKey");
+const Route = require("../src/models/Route");
 const { requireJWT, requireRole } = require("../src/middleware/auth");
 const { getRedisClient } = require("../src/config/database");
 const redisKeys = require("../src/config/redisKeys");
@@ -475,6 +476,116 @@ router.get("/api-keys", requireJWT, async (_req, res, next) => {
     next(err);
   }
 });
+
+// ── Routes CRUD ─────────────────────────────────────────────────────────────
+
+router.get("/routes", requireJWT, async (_req, res, next) => {
+  try {
+    const routes = await Route.find()
+      .populate("backendId", "name baseUrl")
+      .lean();
+    res.json({ routes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post(
+  "/routes",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const {
+        path,
+        method,
+        backendId,
+        stripPrefix,
+        addPrefix,
+        isActive,
+        requiresAuth,
+        rateLimit,
+        priority,
+      } = req.body;
+      if (!path || !method || !backendId) {
+        return res
+          .status(400)
+          .json({ error: "path, method and backendId are required" });
+      }
+      const route = await Route.create({
+        path,
+        method,
+        backendId,
+        stripPrefix,
+        addPrefix,
+        isActive,
+        requiresAuth,
+        rateLimit,
+        priority,
+      });
+      const populated = await Route.findById(route._id)
+        .populate("backendId", "name baseUrl")
+        .lean();
+      res.status(201).json(populated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.put(
+  "/routes/:id",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const {
+        path,
+        method,
+        backendId,
+        stripPrefix,
+        addPrefix,
+        isActive,
+        requiresAuth,
+        rateLimit,
+        priority,
+      } = req.body;
+      const update = {};
+      if (path !== undefined) update.path = path;
+      if (method !== undefined) update.method = method;
+      if (backendId !== undefined) update.backendId = backendId;
+      if (stripPrefix !== undefined) update.stripPrefix = stripPrefix;
+      if (addPrefix !== undefined) update.addPrefix = addPrefix;
+      if (isActive !== undefined) update.isActive = isActive;
+      if (requiresAuth !== undefined) update.requiresAuth = requiresAuth;
+      if (rateLimit !== undefined) update.rateLimit = rateLimit;
+      if (priority !== undefined) update.priority = priority;
+
+      const updated = await Route.findByIdAndUpdate(req.params.id, update, {
+        returnDocument: "after",
+      }).populate("backendId", "name baseUrl");
+      if (!updated) return res.status(404).json({ error: "Route not found" });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.delete(
+  "/routes/:id",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const deleted = await Route.findByIdAndDelete(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Route not found" });
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // Aggregate settings for dashboard UI.
 router.get("/", async (_req, res, next) => {

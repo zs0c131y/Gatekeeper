@@ -29,6 +29,10 @@ function invalidateProxyConfigCache() {
 function transformPath(incomingPath, route) {
   let path = incomingPath;
 
+  console.log(
+    `[proxy] transformPath: incomingPath="${incomingPath}" stripPrefix="${route.stripPrefix}" addPrefix="${route.addPrefix}"`,
+  );
+
   if (route.stripPrefix && path.startsWith(route.stripPrefix)) {
     path = path.slice(route.stripPrefix.length) || "/";
   }
@@ -37,6 +41,7 @@ function transformPath(incomingPath, route) {
     path = route.addPrefix + path;
   }
 
+  console.log(`[proxy] transformPath: result="${path}"`);
   return path || "/";
 }
 
@@ -56,7 +61,11 @@ function getBodyBuffer(req) {
     return Buffer.from(req.body, "utf8");
   }
 
-  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
+  if (
+    req.body &&
+    typeof req.body === "object" &&
+    Object.keys(req.body).length > 0
+  ) {
     return Buffer.from(JSON.stringify(req.body), "utf8");
   }
 
@@ -90,9 +99,10 @@ async function getGlobalCustomHeaders() {
 }
 
 function buildInjectedHeaders(route, globalHeaders) {
-  const routeHeaders = route.injectHeaders && typeof route.injectHeaders === "object"
-    ? route.injectHeaders
-    : {};
+  const routeHeaders =
+    route.injectHeaders && typeof route.injectHeaders === "object"
+      ? route.injectHeaders
+      : {};
 
   return {
     ...globalHeaders,
@@ -108,7 +118,9 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
       const transport = isHttps ? https : http;
       const timeout = backend.timeout ?? 5000;
 
-      const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+      const qs = req.url.includes("?")
+        ? req.url.slice(req.url.indexOf("?"))
+        : "";
       const fullPath = upstreamPath + qs;
 
       const bodyBuf = getBodyBuffer(req);
@@ -212,7 +224,8 @@ function writeLog(fields) {
 function createProxyMiddleware(backend, route) {
   return async (req, res) => {
     const start = Date.now();
-    const traceId = req.traceId || `gk-${crypto.randomBytes(6).toString("hex")}`;
+    const traceId =
+      req.traceId || `gk-${crypto.randomBytes(6).toString("hex")}`;
     const upstreamPath = transformPath(req.path, route);
 
     req.traceId = traceId;
@@ -223,7 +236,13 @@ function createProxyMiddleware(backend, route) {
     let errorMessage;
 
     try {
-      const result = await forwardRequest(req, res, backend, upstreamPath, route);
+      const result = await forwardRequest(
+        req,
+        res,
+        backend,
+        upstreamPath,
+        route,
+      );
       statusCode = result.statusCode;
 
       if (statusCode >= 500) await recordFailure(backend.name);
@@ -256,6 +275,7 @@ function createProxyMiddleware(backend, route) {
         apiKeyId: req.apiKey?._id ?? undefined,
         userId: req.user?.userId ?? undefined,
         errorMessage,
+        source: "gateway",
         requestSize: req.headers["content-length"]
           ? parseInt(req.headers["content-length"], 10)
           : undefined,

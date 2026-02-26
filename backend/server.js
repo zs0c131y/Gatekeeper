@@ -7,16 +7,21 @@ const {
   connectRedis,
   getRedisClient,
 } = require("./src/config/database");
-const { applySecurityMiddleware } = require("./src/middleware/security");
+const {
+  applyPreBodySecurity,
+  applyBodyParsing,
+} = require("./src/middleware/security");
 const errorHandler = require("./src/middleware/errorHandler");
 const seed = require("./src/config/seed");
+const { initAuth, getAuth } = require("./src/lib/auth");
+const { toNodeHandler } = require("better-auth/node");
 
 const overviewRoutes = require("./routes/overview");
 const analyticsRoutes = require("./routes/analytics");
 const logsRoutes = require("./routes/logs");
 const settingsRoutes = require("./routes/settings");
 
-const authRoutes = require("./src/routes/auth");
+const userRoutes = require("./src/routes/user");
 const apiKeyRoutes = require("./src/routes/apiKeys");
 
 const gatewayRoutes = require("./src/routes/gateway");
@@ -29,7 +34,26 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-applySecurityMiddleware(app);
+// ── Phase 1: Security headers + CORS (must precede the auth handler) ─────────
+applyPreBodySecurity(app);
+
+// ── better-auth handler  (must be BEFORE body-parsing middleware) ─────────────
+// The lazy wrapper survives being registered before initAuth() is called; by
+// the time the server accepts connections, initAuth() will already have run.
+app.all("/api/auth/*", (req, res) => {
+  let handler;
+  try {
+    handler = toNodeHandler(getAuth());
+  } catch {
+    return res
+      .status(503)
+      .json({ error: "Auth service not ready", code: "AUTH_NOT_READY" });
+  }
+  return handler(req, res);
+});
+
+// ── Phase 2: Body parsing + sanitation ────────────────────────────────────────
+applyBodyParsing(app);
 
 app.get("/", (_req, res) =>
   res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
@@ -73,7 +97,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/logs", logsRoutes);
 app.use("/api/settings", settingsRoutes);
 
-app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/admin/api-keys", apiKeyRoutes);
 
 app.use("/gateway", gatewayRoutes);
@@ -86,12 +110,18 @@ async function start() {
   try {
     await connectMongoDB();
 
+    let redisClient = null;
     try {
       await connectRedis();
+      redisClient = getRedisClient();
     } catch (err) {
       // Graceful degradation: continue without Redis-backed features.
       console.warn("Redis unavailable, running in degraded mode:", err.message);
     }
+
+    // Initialise better-auth now that the DB (and optionally Redis) is ready.
+    // mongoose.connection.db is the native Db instance.
+    initAuth(mongoose.connection.db, redisClient);
 
     await seed();
     await startHealthCheckLoop();

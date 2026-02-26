@@ -24,13 +24,13 @@ function captureRawBody(req, _res, buf) {
 }
 
 /**
- * Apply all security middleware to the Express app.
+ * Phase 1 – apply security headers and CORS *before* body parsing.
+ * The better-auth request handler must be mounted after this call but
+ * before applyBodyParsing(), so that it can read the raw request body.
+ *
  * @param {import('express').Express} app
  */
-function applySecurityMiddleware(app) {
-  const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "256kb";
-  const formBodyLimit = process.env.FORM_BODY_LIMIT || "64kb";
-
+function applyPreBodySecurity(app) {
   app.use(helmet());
 
   const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -45,6 +45,7 @@ function applySecurityMiddleware(app) {
     }),
   );
 
+  // Rate-limit the auth path (applied before the auth handler itself)
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -56,6 +57,17 @@ function applySecurityMiddleware(app) {
     },
   });
   app.use("/api/auth", authLimiter);
+}
+
+/**
+ * Phase 2 – apply body parsing and sanitation middleware.
+ * Must be called *after* the better-auth handler is mounted.
+ *
+ * @param {import('express').Express} app
+ */
+function applyBodyParsing(app) {
+  const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "256kb";
+  const formBodyLimit = process.env.FORM_BODY_LIMIT || "64kb";
 
   app.use(
     express.json({
@@ -81,4 +93,19 @@ function applySecurityMiddleware(app) {
   });
 }
 
-module.exports = { applySecurityMiddleware };
+/**
+ * Convenience wrapper – applies both phases in the correct order.
+ * Still exported so existing tests / scripts don't break.
+ *
+ * @param {import('express').Express} app
+ */
+function applySecurityMiddleware(app) {
+  applyPreBodySecurity(app);
+  applyBodyParsing(app);
+}
+
+module.exports = {
+  applyPreBodySecurity,
+  applyBodyParsing,
+  applySecurityMiddleware,
+};

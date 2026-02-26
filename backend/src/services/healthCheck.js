@@ -13,6 +13,9 @@ const { getRedisClient } = require("../config/database");
 
 let _timer = null;
 
+// In-memory score fallback used when Redis is unavailable.
+const _memScores = new Map();
+
 function probeBackend(backend) {
   return new Promise((resolve) => {
     const targetUrl = new URL(backend.healthCheckPath || "/health", backend.baseUrl);
@@ -49,16 +52,25 @@ function probeBackend(backend) {
 
 async function checkBackend(backend) {
   const redis = getRedisClient();
-  if (!redis) return;
 
   try {
     const score = await probeBackend(backend);
-    await redis.set(redisKeys.healthScore(backend.name), String(score));
-    await redis.set(redisKeys.healthLastCheck(backend.name), new Date().toISOString());
+    if (redis) {
+      await redis.set(redisKeys.healthScore(backend.name), String(score));
+      await redis.set(redisKeys.healthLastCheck(backend.name), new Date().toISOString());
+    } else {
+      _memScores.set(backend.name, score);
+    }
     console.log(`[HealthCheck] ${backend.name}: score=${score}`);
   } catch (err) {
     console.error(`[HealthCheck] ${backend.name} error:`, err.message);
   }
+}
+
+/** Returns the in-memory health score for a backend (Redis-free fallback). */
+function getMemoryScore(name) {
+  const v = _memScores.get(name);
+  return v === undefined ? null : v;
 }
 
 async function runHealthChecks() {
@@ -120,4 +132,5 @@ module.exports = {
   stopHealthCheckLoop,
   runHealthChecks,
   scoreToStatus,
+  getMemoryScore,
 };

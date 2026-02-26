@@ -13,6 +13,8 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
+import { useGatewayFilter } from "../context/GatewayFilterContext";
+import { Filter } from "lucide-react";
 import { api } from "../utils/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,7 @@ export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, updateProfile } = useAuth();
+  const { routesOnly } = useGatewayFilter();
   const breadcrumbs = breadcrumbMap[location.pathname] || ["Dashboard"];
   const searchRef = useRef(null);
   const notificationsRef = useRef(null);
@@ -286,6 +289,12 @@ export function TopBar() {
               )}
             </div>
           ))}
+          {routesOnly && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+              <Filter className="w-2.5 h-2.5" />
+              Gateway only
+            </span>
+          )}
         </div>
       </div>
 

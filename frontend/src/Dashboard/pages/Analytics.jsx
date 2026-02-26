@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import {
   Activity,
   Clock,
@@ -105,10 +106,11 @@ function KpiCard({ title, value, subtitle, icon: Icon, color }) {
 export function Analytics() {
   const [hours, setHours] = useState(24);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const { routesOnly } = useGatewayFilter();
 
   const { data, loading, error, refetch } = useApi(
-    () => api.getAnalysis({ hours }),
-    [hours],
+    () => api.getAnalysis({ hours, ...(routesOnly && { routesOnly: "true" }) }),
+    [hours, routesOnly],
   );
 
   useEffect(() => {
@@ -155,6 +157,11 @@ export function Analytics() {
           <p className="text-sm text-gray-500 mt-1">
             Deep-dive into gateway performance, traffic patterns, and threat
             signals
+            {routesOnly && (
+              <span className="ml-2 text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                Gateway routes only
+              </span>
+            )}
           </p>
         </div>
 
@@ -245,7 +252,10 @@ export function Analytics() {
                   tick={{ fill: "#888", fontSize: 11 }}
                 />
                 <YAxis stroke="#666" tick={{ fill: "#888", fontSize: 11 }} />
-                <Tooltip contentStyle={chartTooltipStyle} />
+                <Tooltip
+                  cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                  contentStyle={chartTooltipStyle}
+                />
                 <Bar
                   dataKey="count"
                   fill="url(#latGrad)"
@@ -516,8 +526,11 @@ export function Analytics() {
                   interval={2}
                 />
                 <YAxis stroke="#666" tick={{ fill: "#888", fontSize: 11 }} />
-                <Tooltip contentStyle={chartTooltipStyle} />
-                <Legend />
+                <Tooltip
+                  cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                  contentStyle={chartTooltipStyle}
+                />
+                <Legend wrapperStyle={{ color: "#888", fontSize: 12 }} />
                 <Bar
                   dataKey="requests"
                   fill="url(#hourReq)"
