@@ -639,6 +639,8 @@ function BackendModal({ initial, onClose, onSubmit }) {
       initial?.healthPath || initial?.health_endpoint || "/health",
     weight: initial?.weight || 1,
     timeout: initial?.timeout || 5000,
+    healthyAbove: initial?.healthyAbove ?? 80,
+    degradedAbove: initial?.degradedAbove ?? 50,
   });
 
   return (
@@ -684,6 +686,53 @@ function BackendModal({ initial, onClose, onSubmit }) {
             value={form.timeout}
             onChange={(v) => setForm((f) => ({ ...f, timeout: Number(v) }))}
           />
+
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            <p className="text-sm text-gray-400">Health Status Thresholds</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-400">
+                  Healthy above (0–100)
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.healthyAbove}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, healthyAbove: Number(e.target.value) }))
+                  }
+                  className="bg-white/5 border-white/10 text-white h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-400">
+                  Degraded above (0–100)
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.degradedAbove}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, degradedAbove: Number(e.target.value) }))
+                  }
+                  className="bg-white/5 border-white/10 text-white h-8 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <span className="text-emerald-400">
+                ● ≥{form.healthyAbove} healthy
+              </span>
+              <span className="text-amber-400">
+                ● ≥{form.degradedAbove} degraded
+              </span>
+              <span className="text-red-400">
+                ● &lt;{form.degradedAbove} unhealthy
+              </span>
+            </div>
+          </div>
 
           <div className="flex gap-2 pt-2">
             <Button
