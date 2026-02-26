@@ -101,6 +101,12 @@ const DEFAULT_CONFIGS = [
     description: "Alert rule enablement configuration",
     category: "alerts",
   },
+  {
+    key: "routing.ddos_threshold_rpm",
+    value: 500,
+    description: "Requests per minute per route that triggers automatic route disable (DDoS protection)",
+    category: "routing",
+  },
 ];
 
 /**
