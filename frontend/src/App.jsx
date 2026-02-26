@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { GatewayFilterProvider } from "./context/GatewayFilterContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DashboardLayout } from "./Dashboard/DashboardLayout";
 import { Overview } from "./Dashboard/pages/Overview";
@@ -9,11 +10,15 @@ import { Settings } from "./Dashboard/pages/Settings";
 import { Profile } from "./Dashboard/pages/Profile";
 import LandingPage from "./LandingPage/LandingPage";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import "./App.css";
 
 function App() {
   return (
     <AuthProvider>
+      <GatewayFilterProvider>
       <BrowserRouter>
         <Routes>
           {/* Landing Page */}
@@ -21,6 +26,9 @@ function App() {
 
           {/* Auth */}
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Protected Dashboard Routes */}
           <Route
@@ -42,6 +50,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </GatewayFilterProvider>
     </AuthProvider>
   );
 }

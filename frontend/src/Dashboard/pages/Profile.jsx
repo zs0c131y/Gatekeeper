@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../utils/api";
+import { authClient } from "../../lib/auth-client";
 import { Progress } from "@/components/ui/progress";
 
 const SUPPORTED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -166,6 +167,26 @@ export function Profile() {
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== "delete") return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    const { error } = await authClient.deleteUser();
+    if (error) {
+      setDeleteError(
+        error.message || "Failed to delete account. Please try again.",
+      );
+      setDeleteLoading(false);
+      return;
+    }
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
   const strength = useMemo(
     () => passwordStrength(passwordForm.newPassword),
@@ -705,6 +726,73 @@ export function Profile() {
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out Of This Session
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="bg-[#111111] border-red-500/20">
+            <CardHeader>
+              <CardTitle className="text-red-400 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                Danger Zone
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/15 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    Delete account permanently
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    This will immediately delete your account, all your API
+                    keys, and all associated data. This action cannot be undone.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">
+                    Type{" "}
+                    <span className="text-red-400 font-mono font-semibold">
+                      delete
+                    </span>{" "}
+                    to confirm
+                  </Label>
+                  <input
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => {
+                      setDeleteConfirm(e.target.value);
+                      setDeleteError("");
+                    }}
+                    placeholder="delete"
+                    disabled={deleteLoading}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-red-500/50 disabled:opacity-50 font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                {deleteError && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <TriangleAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <p className="text-sm text-red-400">{deleteError}</p>
+                  </div>
+                )}
+                <Button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirm !== "delete" || deleteLoading}
+                  className="w-full bg-red-600/20 border border-red-500/40 text-red-300 hover:bg-red-600/30 hover:text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting account…
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <Trash2 className="w-4 h-4" />
+                      Delete my account
+                    </span>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

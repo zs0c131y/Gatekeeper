@@ -13,6 +13,10 @@ app.get("/", (req, res) => {
     res.send("Hello World!");
 });
 
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", port: PORT });
+});
+
 app.get("/err", (req, res) => {
     return 100 / 0
 });

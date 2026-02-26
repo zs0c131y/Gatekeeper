@@ -10,6 +10,7 @@ import {
   Copy,
   Shield,
   Server,
+  Route,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ const tabs = [
   { id: "ratelimiting", label: "Rate Limiting" },
   { id: "circuitbreakers", label: "Circuit Breakers" },
   { id: "backends", label: "Backends" },
+  { id: "routes", label: "Routes" },
   { id: "security", label: "Security" },
   { id: "alerts", label: "Alerts" },
 ];
@@ -91,6 +93,13 @@ export function Settings() {
     error: backendsError,
     refetch: refetchBackends,
   } = useApi(() => api.getBackends());
+
+  const {
+    data: routesData,
+    loading: routesLoading,
+    error: routesError,
+    refetch: refetchRoutes,
+  } = useApi(() => api.getRoutes());
 
   const withSaveStatus = async (action) => {
     try {
@@ -185,6 +194,19 @@ export function Settings() {
                 <BackendsTab
                   backends={backendsData?.backends || []}
                   refetch={refetchBackends}
+                />
+              ))}
+
+            {activeTab === "routes" &&
+              (routesLoading ? (
+                <LoadingSkeleton variant="card" count={3} />
+              ) : routesError ? (
+                <ErrorMessage error={routesError} onRetry={refetchRoutes} />
+              ) : (
+                <RoutesTab
+                  routes={routesData?.routes || []}
+                  backends={backendsData?.backends || []}
+                  refetch={refetchRoutes}
                 />
               ))}
 
@@ -662,6 +684,298 @@ function BackendModal({ initial, onClose, onSubmit }) {
             value={form.timeout}
             onChange={(v) => setForm((f) => ({ ...f, timeout: Number(v) }))}
           />
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="submit"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+            >
+              {initial ? "Update" : "Create"}
+            </Button>
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="outline"
+              className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RoutesTab({ routes, backends, refetch }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const handleDelete = async (route) => {
+    if (!window.confirm(`Delete route ${route.method} ${route.path}?`)) return;
+    await api.deleteRoute(route._id);
+    refetch();
+  };
+
+  const handleSubmit = async (payload) => {
+    if (editing) {
+      await api.updateRoute(editing._id, payload);
+    } else {
+      await api.createRoute(payload);
+    }
+    setEditing(null);
+    setShowModal(false);
+    refetch();
+  };
+
+  const METHOD_COLORS = {
+    GET: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+    POST: "text-amber-400 bg-amber-400/10 border-amber-400/20",
+    PUT: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    PATCH: "text-purple-400 bg-purple-400/10 border-purple-400/20",
+    DELETE: "text-red-400 bg-red-400/10 border-red-400/20",
+    "*": "text-gray-300 bg-white/5 border-white/10",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Route className="w-5 h-5 text-amber-400" />
+          <h2 className="text-2xl font-bold text-white">Route Configuration</h2>
+        </div>
+        <Button
+          onClick={() => setShowModal(true)}
+          className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+        >
+          <Plus className="w-4 h-4" />
+          Add Route
+        </Button>
+      </div>
+
+      <p className="text-sm text-gray-400">
+        Define which paths the gateway proxies and to which backend. Routes are
+        matched in priority order.
+      </p>
+
+      {routes.length === 0 ? (
+        <EmptyState
+          message="No routes configured"
+          description="Add your first route to start proxying traffic"
+          icon="server"
+        />
+      ) : (
+        <div className="space-y-3">
+          {routes
+            .slice()
+            .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+            .map((route) => (
+              <div
+                key={route._id}
+                className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-xl hover:border-amber-500/20 transition-colors"
+              >
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded border font-mono shrink-0 ${METHOD_COLORS[route.method] ?? METHOD_COLORS["*"]}`}
+                >
+                  {route.method}
+                </span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-mono text-sm truncate">
+                    {route.path}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    → {route.backendId?.name ?? route.backendId}
+                    {route.stripPrefix && (
+                      <span className="ml-2 text-gray-600">
+                        strip: {route.stripPrefix}
+                      </span>
+                    )}
+                    {route.addPrefix && (
+                      <span className="ml-2 text-gray-600">
+                        add: {route.addPrefix}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {route.requiresAuth && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-amber-500/30 text-amber-400"
+                    >
+                      Auth
+                    </Badge>
+                  )}
+                  <Badge
+                    variant={
+                      route.isActive !== false ? "success" : "destructive"
+                    }
+                    className="text-xs"
+                  >
+                    {route.isActive !== false ? "Active" : "Off"}
+                  </Badge>
+                  <span className="text-xs text-gray-600">
+                    p:{route.priority ?? 0}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(route);
+                      setShowModal(true);
+                    }}
+                    className="bg-white/5 hover:bg-white/10 border-white/10 text-white h-8 w-8 p-0"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(route)}
+                    className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 h-8 w-8 p-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {showModal && (
+        <RouteModal
+          initial={editing}
+          backends={backends}
+          onClose={() => {
+            setShowModal(false);
+            setEditing(null);
+          }}
+          onSubmit={handleSubmit}
+        />
+      )}
+    </div>
+  );
+}
+
+function RouteModal({ initial, backends, onClose, onSubmit }) {
+  const [form, setForm] = useState({
+    path: initial?.path || "",
+    method: initial?.method || "GET",
+    backendId: initial?.backendId?._id || initial?.backendId || "",
+    stripPrefix: initial?.stripPrefix || "",
+    addPrefix: initial?.addPrefix || "",
+    isActive: initial?.isActive !== false,
+    requiresAuth: initial?.requiresAuth || false,
+    rateLimit: initial?.rateLimit || "",
+    priority: initial?.priority ?? 0,
+  });
+
+  const METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "*"];
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="bg-[#111111] border-white/20 text-white max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{initial ? "Edit Route" : "Add Route"}</DialogTitle>
+          <DialogDescription className="text-gray-400">
+            Configure the path, method and target backend for this route.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(form);
+          }}
+          className="space-y-4"
+        >
+          <Field
+            label="Path (e.g. /api/v1/*)"
+            value={form.path}
+            onChange={(v) => setForm((f) => ({ ...f, path: v }))}
+          />
+
+          <div className="space-y-2">
+            <Label className="text-gray-300">Method</Label>
+            <Select
+              value={form.method}
+              onValueChange={(v) => setForm((f) => ({ ...f, method: v }))}
+            >
+              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#111111] border-white/10 text-white">
+                {METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-gray-300">Backend</Label>
+            <Select
+              value={form.backendId}
+              onValueChange={(v) => setForm((f) => ({ ...f, backendId: v }))}
+            >
+              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectValue placeholder="Select backend" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#111111] border-white/10 text-white">
+                {backends.map((b) => (
+                  <SelectItem key={b._id} value={b._id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="Strip Prefix"
+              value={form.stripPrefix}
+              onChange={(v) => setForm((f) => ({ ...f, stripPrefix: v }))}
+            />
+            <Field
+              label="Add Prefix"
+              value={form.addPrefix}
+              onChange={(v) => setForm((f) => ({ ...f, addPrefix: v }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="Rate Limit (rpm)"
+              value={form.rateLimit}
+              onChange={(v) => setForm((f) => ({ ...f, rateLimit: v }))}
+            />
+            <Field
+              label="Priority"
+              value={form.priority}
+              onChange={(v) => setForm((f) => ({ ...f, priority: Number(v) }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <ToggleCard
+              label="Active"
+              checked={form.isActive}
+              onChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
+            />
+            <ToggleCard
+              label="Requires Auth"
+              checked={form.requiresAuth}
+              onChange={(v) => setForm((f) => ({ ...f, requiresAuth: v }))}
+            />
+          </div>
 
           <div className="flex gap-2 pt-2">
             <Button

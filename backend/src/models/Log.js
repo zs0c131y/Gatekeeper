@@ -56,6 +56,15 @@ const logSchema = new mongoose.Schema(
     responseSize: {
       type: Number,
     },
+    /**
+     * Marks logs produced by the real request proxy.
+     * Seeded / simulated logs will not have this field set.
+     * Use source:'gateway' to differentiate live traffic from demo data.
+     */
+    source: {
+      type: String,
+      enum: ["gateway"],
+    },
   },
   { timestamps: false },
 );
@@ -63,5 +72,6 @@ const logSchema = new mongoose.Schema(
 logSchema.index({ timestamp: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 logSchema.index({ clientIp: 1 });
 logSchema.index({ status: 1 });
+logSchema.index({ source: 1 });
 
 module.exports = mongoose.model("Log", logSchema);

@@ -26,9 +26,11 @@ function floorToHour(date) {
   return d;
 }
 
-async function getLogsSince(hours, limit = 25_000) {
+async function getLogsSince(hours, limit = 25_000, routesOnly = false) {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-  return Log.find({ timestamp: { $gte: since } })
+  const filter = { timestamp: { $gte: since } };
+  if (routesOnly) filter.source = "gateway";
+  return Log.find(filter)
     .sort({ timestamp: -1 })
     .limit(limit)
     .lean();
@@ -156,26 +158,30 @@ function buildTopErrorEndpoints(logs) {
 router.get("/traffic", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const routesOnly = req.query.routesOnly === "true";
 
-    const analytics = await Analytics.find({
-      period: "hour",
-      timestamp: { $gte: since },
-    })
-      .sort({ timestamp: 1 })
-      .lean();
+    // Only use pre-aggregated Analytics when not filtering by source
+    if (!routesOnly) {
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+      const analytics = await Analytics.find({
+        period: "hour",
+        timestamp: { $gte: since },
+      })
+        .sort({ timestamp: 1 })
+        .lean();
 
-    if (analytics.length > 0) {
-      return res.json(
-        analytics.map((a) => ({
-          time: a.timestamp,
-          successful: a.successCount,
-          errors: a.errorCount,
-        })),
-      );
+      if (analytics.length > 0) {
+        return res.json(
+          analytics.map((a) => ({
+            time: a.timestamp,
+            successful: a.successCount,
+            errors: a.errorCount,
+          })),
+        );
+      }
     }
 
-    const logs = await getLogsSince(hours);
+    const logs = await getLogsSince(hours, 25_000, routesOnly);
     const buckets = bucketByHour(logs);
     res.json(buckets.map((b) => ({ time: b.time, successful: b.successful, errors: b.errors })));
   } catch (err) {
@@ -186,7 +192,8 @@ router.get("/traffic", async (req, res, next) => {
 router.get("/latency-distribution", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const logs = await getLogsSince(hours, 30_000);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 30_000, routesOnly);
     res.json(buildLatencyDistribution(logs));
   } catch (err) {
     next(err);
@@ -196,7 +203,8 @@ router.get("/latency-distribution", async (req, res, next) => {
 router.get("/errors", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const logs = await getLogsSince(hours, 30_000);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 30_000, routesOnly);
 
     const c4xx = logs.filter((l) => l.status >= 400 && l.status < 500).length;
     const c5xx = logs.filter((l) => l.status >= 500).length;
@@ -222,7 +230,8 @@ router.get("/errors", async (req, res, next) => {
 router.get("/endpoints", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const logs = await getLogsSince(hours, 40_000);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 40_000, routesOnly);
     res.json(buildEndpointMetrics(logs).slice(0, 20));
   } catch (err) {
     next(err);
@@ -254,7 +263,8 @@ router.get("/clients", async (_req, res, next) => {
 router.get("/summary", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const logs = await getLogsSince(hours, 40_000);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 40_000, routesOnly);
 
     const trafficBuckets = bucketByHour(logs);
     const endpointMetrics = buildEndpointMetrics(logs).slice(0, 20);
@@ -296,7 +306,8 @@ router.get("/summary", async (req, res, next) => {
 router.get("/analysis", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);
-    const logs = await getLogsSince(hours, 40_000);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 40_000, routesOnly);
 
     const totalRequests = logs.length;
     const errorCount = logs.filter((l) => l.status >= 400).length;

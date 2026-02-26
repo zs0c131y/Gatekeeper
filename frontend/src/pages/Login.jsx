@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Zap, Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cn } from "../lib/utils";
@@ -25,14 +25,14 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) {
-      setFormError("Email and password are required");
+      setFormError("Please enter your email and password");
       return;
     }
     const result = await login(form.email, form.password);
     if (result.success) {
       navigate(from, { replace: true });
     } else {
-      setFormError(result.error || "Invalid credentials");
+      setFormError(result.error || "Incorrect email or password. Please try again.");
     }
   };
 
@@ -157,13 +157,24 @@ export default function Login() {
                 "Sign in"
               )}
             </Button>
+
+            <div className="flex justify-between text-xs pt-1">
+              <Link
+                to="/forgot-password"
+                className="text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                Forgot password?
+              </Link>
+              <Link
+                to="/register"
+                className="text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                Create account
+              </Link>
+            </div>
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-600 mt-6">
-          Default admin:{" "}
-          <span className="text-gray-400 font-mono">admin@gateway.local</span>
-        </p>
       </div>
     </div>
   );

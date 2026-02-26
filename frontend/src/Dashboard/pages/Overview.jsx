@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import {
   TrendingUp,
   TrendingDown,
@@ -10,7 +11,10 @@ import {
   Wifi,
   PlayCircle,
   PauseCircle,
+  Filter,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Line,
   AreaChart,
@@ -111,12 +115,16 @@ function MetricCard({ title, value, change, trend, icon: Icon, color }) {
 }
 
 export function Overview() {
+  const { routesOnly, setRoutesOnly } = useGatewayFilter();
   const {
     data: overviewData,
     loading,
     error,
     refetch,
-  } = useApi(() => api.getOverview());
+  } = useApi(
+    () => api.getOverview(routesOnly ? { routesOnly: "true" } : {}),
+    [routesOnly],
+  );
   const { data: alertsData, refetch: refetchAlerts } = useApi(() =>
     api.getOverviewAlerts(),
   );
@@ -138,9 +146,32 @@ export function Overview() {
     }));
   }, [overviewData?.trafficData]);
 
+  // Live delta from SSE: how many requests arrived since the last REST fetch.
+  const [sseReqDelta, setSseReqDelta] = useState(0);
+  const sseReqDeltaRef = useRef(0);
+
+  // Reset delta whenever REST data refreshes (it already includes those reqs).
+  useEffect(() => {
+    sseReqDeltaRef.current = 0;
+    setSseReqDelta(0);
+  }, [overviewData?.totalRequests]);
+
+  // Inject the live SSE delta into the most-recent traffic bucket so the chart
+  // reacts to real requests within seconds, not waiting for the 30 s poll.
+  const liveTrafficData = useMemo(() => {
+    if (!trafficData.length) return trafficData;
+    const updated = [...trafficData];
+    const last = updated[updated.length - 1];
+    updated[updated.length - 1] = {
+      ...last,
+      requests: last.requests + sseReqDelta,
+    };
+    return updated;
+  }, [trafficData, sseReqDelta]);
+
   const trafficSlice = useMemo(
-    () => trafficData.slice(-trafficWindow),
-    [trafficData, trafficWindow],
+    () => liveTrafficData.slice(-trafficWindow),
+    [liveTrafficData, trafficWindow],
   );
 
   const trafficStats = useMemo(() => {
@@ -185,17 +216,50 @@ export function Overview() {
 
   const burstData = useMemo(() => trafficSlice.slice(-16), [trafficSlice]);
 
-  // Auto-refresh every 30 seconds
+  // Keep stable refs to the latest refetch functions so the interval
+  // doesn't get reset on every render (which would prevent it from firing).
+  const refetchRef = useRef(refetch);
+  const refetchAlertsRef = useRef(refetchAlerts);
+  useEffect(() => {
+    refetchRef.current = refetch;
+    refetchAlertsRef.current = refetchAlerts;
+  });
+
+  // SSE stream — sends { time, requests } every second where `requests` = the
+  // number of logs written in the past second. Drives live chart + total count.
+  useEffect(() => {
+    if (isPaused) return;
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    const qs = routesOnly ? "?routesOnly=true" : "";
+    const es = new EventSource(`${baseUrl}/api/overview/traffic/stream${qs}`);
+    es.onmessage = (event) => {
+      try {
+        const { requests } = JSON.parse(event.data);
+        if (requests > 0) {
+          sseReqDeltaRef.current += requests;
+          setSseReqDelta(sseReqDeltaRef.current);
+        }
+      } catch {
+        /* ignore malformed frame */
+      }
+    };
+    return () => es.close();
+  }, [isPaused, routesOnly]);
+
+  // Auto-refresh every 30 seconds — stable interval that never resets
   useEffect(() => {
     if (isPaused) return;
 
     const interval = setInterval(() => {
-      refetch();
-      refetchAlerts();
+      refetchRef.current();
+      refetchAlertsRef.current();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [isPaused, refetch, refetchAlerts]);
+  }, [isPaused]);
+
+  // Live total requests = REST snapshot + SSE delta since last fetch.
+  const liveTotalRequests = (overviewData?.totalRequests ?? 0) + sseReqDelta;
 
   const getLatencyColor = (latency) => {
     if (latency < 50) return "text-green-400";
@@ -238,11 +302,43 @@ export function Overview() {
 
   return (
     <div className="space-y-6">
+      {/* Data Source Toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
+            Overview
+          </h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Gateway traffic and health at a glance
+          </p>
+        </div>
+        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <Label
+            htmlFor="routes-only-toggle"
+            className="text-sm text-gray-300 cursor-pointer select-none"
+          >
+            Gateway routes only
+          </Label>
+          <Switch
+            id="routes-only-toggle"
+            checked={routesOnly}
+            onCheckedChange={setRoutesOnly}
+            className="data-[state=checked]:bg-amber-500"
+          />
+          <span
+            className={`text-xs font-medium ${routesOnly ? "text-amber-400" : "text-gray-500"}`}
+          >
+            {routesOnly ? "Filtered" : "All traffic"}
+          </span>
+        </div>
+      </div>
+
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Requests"
-          value={overviewData.totalRequests?.toLocaleString() || "0"}
+          value={liveTotalRequests.toLocaleString()}
           change={overviewData.requestsChange}
           trend="vs last hour"
           icon={Activity}
@@ -274,15 +370,19 @@ export function Overview() {
           value={`${overviewData.activeBackends || 0}/${overviewData.backends?.length || 0}`}
           change={overviewData.backendsChange}
           trend={
-            overviewData.activeBackends === overviewData.backends?.length
-              ? "all healthy"
-              : "degraded"
+            overviewData.activeBackends === 0
+              ? "all unreachable"
+              : overviewData.activeBackends === overviewData.backends?.length
+                ? "all responding"
+                : "some unreachable"
           }
           icon={Server}
           color={
-            overviewData.activeBackends === overviewData.backends?.length
-              ? "green"
-              : "red"
+            overviewData.activeBackends === 0
+              ? "red"
+              : overviewData.activeBackends === overviewData.backends?.length
+                ? "green"
+                : "amber"
           }
         />
       </div>
@@ -491,7 +591,10 @@ export function Overview() {
                 <BarChart data={burstData}>
                   <XAxis dataKey="timeLabel" hide />
                   <YAxis hide />
-                  <Tooltip content={<TrafficTooltip />} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                    content={<TrafficTooltip />}
+                  />
                   <Bar
                     dataKey="requests"
                     radius={[4, 4, 0, 0]}

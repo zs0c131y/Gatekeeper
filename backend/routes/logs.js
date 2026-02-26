@@ -27,11 +27,14 @@ router.get("/stream/live", (req, res) => {
   });
   res.flushHeaders();
 
+  const routesOnly = req.query.routesOnly === "true";
   let lastTimestamp = new Date();
 
   const send = async () => {
     try {
-      const newLogs = await Log.find({ timestamp: { $gt: lastTimestamp } })
+      const streamFilter = { timestamp: { $gt: lastTimestamp } };
+      if (routesOnly) streamFilter.source = "gateway";
+      const newLogs = await Log.find(streamFilter)
         .sort({ timestamp: 1 })
         .limit(25)
         .lean();
@@ -63,8 +66,10 @@ router.get("/", async (req, res, next) => {
     const from = req.query.from;
     const to = req.query.to;
 
+    const routesOnly = req.query.routesOnly === "true";
     const filter = {};
 
+    if (routesOnly) filter.source = "gateway";
     if (method) filter.method = String(method).toUpperCase();
     if (clientIp) filter.clientIp = { $regex: String(clientIp), $options: "i" };
     if (endpoint) filter.endpoint = { $regex: String(endpoint), $options: "i" };

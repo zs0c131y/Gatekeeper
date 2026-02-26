@@ -1,9 +1,8 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
-const User = require("../models/User");
 const Config = require("../models/Config");
+const { initAuth, getAuth } = require("../lib/auth");
 
 const DEFAULT_ADMIN = {
   username: "admin",
@@ -105,21 +104,35 @@ const DEFAULT_CONFIGS = [
 ];
 
 /**
- * Seed the database with default admin user and config documents.
+ * Seed the database with the default admin user (via better-auth) and
+ * application config documents.
  */
 async function seed() {
-  // Seed admin user
-  const existingAdmin = await User.findOne({
-    username: DEFAULT_ADMIN.username,
-  });
-  if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash(DEFAULT_ADMIN.password, 12);
-    await User.create({
-      username: DEFAULT_ADMIN.username,
-      email: DEFAULT_ADMIN.email,
-      passwordHash,
-      role: DEFAULT_ADMIN.role,
+  const auth = getAuth();
+  const db = mongoose.connection.db;
+
+  // ── Admin user ────────────────────────────────────────────────────────────
+  const existing = await db
+    .collection("user")
+    .findOne({ email: DEFAULT_ADMIN.email });
+
+  if (!existing) {
+    // Create via better-auth so the password is hashed with its algorithm
+    const result = await auth.api.signUpEmail({
+      body: {
+        email: DEFAULT_ADMIN.email,
+        password: DEFAULT_ADMIN.password,
+        name: DEFAULT_ADMIN.username,
+      },
     });
+
+    // Promote to admin role in better-auth's user collection
+    if (result?.user?.id) {
+      await db
+        .collection("user")
+        .updateOne({ id: result.user.id }, { $set: { role: "admin" } });
+    }
+
     console.log("Seeded default admin user");
   } else {
     console.log("Admin user already exists, skipping");
@@ -147,6 +160,8 @@ if (require.main === module) {
     .connect(uri)
     .then(() => {
       console.log("Connected to MongoDB for seeding");
+      // Initialise better-auth (no Redis when running standalone)
+      initAuth(mongoose.connection.db, null);
       return seed();
     })
     .then(() => {
