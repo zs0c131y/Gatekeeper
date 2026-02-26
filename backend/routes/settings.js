@@ -55,6 +55,7 @@ async function upsertConfig(key, value, updatedBy) {
 
 async function getGeneralSettings() {
   const m = await getCategoryMap("general");
+  const routing = await getCategoryMap("routing");
   return {
     gatewayName: m["general.gateway_name"] ?? "Gatekeeper API Gateway",
     loggingLevel: m["general.logging_level"] ?? "info",
@@ -62,6 +63,7 @@ async function getGeneralSettings() {
     adaptiveRateLimiting: m["general.adaptive_rate_limiting"] ?? true,
     circuitBreaking: m["general.circuit_breaking"] ?? true,
     realtimeAnalytics: m["general.realtime_analytics"] ?? true,
+    ddosThresholdRpm: routing["routing.ddos_threshold_rpm"] ?? 500,
   };
 }
 
@@ -161,6 +163,7 @@ async function updateGeneral(payload, updatedBy) {
     "general.adaptive_rate_limiting": payload.adaptiveRateLimiting,
     "general.circuit_breaking": payload.circuitBreaking,
     "general.realtime_analytics": payload.realtimeAnalytics,
+    "routing.ddos_threshold_rpm": payload.ddosThresholdRpm,
   };
 
   await Promise.all(
