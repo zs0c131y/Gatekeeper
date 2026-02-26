@@ -39,6 +39,10 @@ const redisKeys = {
   jwtBlacklist: (jti) => `auth:blacklist:${jti}`,
   /** @param {string} userId */
   refreshToken: (userId) => `auth:refresh:${userId}`,
+
+  // DDoS auto-disable counters (60s sliding window)
+  /** @param {string} routePath */
+  ddosCounter: (routePath) => `ddos:rps:${routePath}`,
 };
 
 module.exports = redisKeys;
