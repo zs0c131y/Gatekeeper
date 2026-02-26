@@ -119,11 +119,13 @@ function stopHealthCheckLoop() {
   }
 }
 
-function scoreToStatus(score) {
+function scoreToStatus(score, thresholds = {}) {
   const n = score === null || score === undefined ? null : parseInt(score, 10);
   if (n === null || Number.isNaN(n)) return "unknown";
-  if (n >= 80) return "healthy";
-  if (n >= 50) return "degraded";
+  const healthyAbove = thresholds.healthyAbove ?? 80;
+  const degradedAbove = thresholds.degradedAbove ?? 50;
+  if (n >= healthyAbove) return "healthy";
+  if (n >= degradedAbove) return "degraded";
   return "unhealthy";
 }
 

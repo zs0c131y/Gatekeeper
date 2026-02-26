@@ -129,7 +129,10 @@ router.get("/", async (req, res, next) => {
         const circuitState = await getCircuitStateRaw(redis, b.name);
         return {
           name: b.name,
-          status: scoreToStatus(score),
+          status: scoreToStatus(score, {
+            healthyAbove: b.healthyAbove,
+            degradedAbove: b.degradedAbove,
+          }),
           circuitState,
           healthScore: score ?? 0,
         };

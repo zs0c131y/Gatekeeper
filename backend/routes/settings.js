@@ -18,6 +18,7 @@ const {
   invalidateCircuitBreakerConfigCache,
 } = require("../src/middleware/circuitBreaker");
 const { invalidateProxyConfigCache } = require("../src/middleware/proxy");
+const { scoreToStatus } = require("../src/services/healthCheck");
 
 const router = Router();
 
@@ -119,14 +120,10 @@ async function getBackendsView() {
         ? (await redis.get(redisKeys.circuitState(b.name))) || "CLOSED"
         : "CLOSED";
 
-      const status =
-        score === null
-          ? "unknown"
-          : score >= 80
-            ? "healthy"
-            : score >= 50
-              ? "degraded"
-              : "unhealthy";
+      const status = scoreToStatus(score, {
+        healthyAbove: b.healthyAbove,
+        degradedAbove: b.degradedAbove,
+      });
 
       const shape = {
         _id: b._id,
@@ -137,6 +134,8 @@ async function getBackendsView() {
         weight: b.weight,
         timeout: b.timeout,
         isActive: b.isActive,
+        healthyAbove: b.healthyAbove ?? 80,
+        degradedAbove: b.degradedAbove ?? 50,
         status,
         healthScore: score,
         circuitState,
@@ -339,6 +338,8 @@ router.post(
         healthCheckPath: healthPath || "/health",
         weight: weight || 1,
         timeout: timeout || 5000,
+        healthyAbove: req.body.healthyAbove ?? 80,
+        degradedAbove: req.body.degradedAbove ?? 50,
       });
 
       res.status(201).json(backend);
@@ -377,6 +378,8 @@ router.put(
       if (weight !== undefined) update.weight = weight;
       if (timeout !== undefined) update.timeout = timeout;
       if (isActive !== undefined) update.isActive = isActive;
+      if (req.body.healthyAbove !== undefined) update.healthyAbove = req.body.healthyAbove;
+      if (req.body.degradedAbove !== undefined) update.degradedAbove = req.body.degradedAbove;
 
       const query = id ? { _id: id } : { name: nameOrId };
       const updated = await Backend.findOneAndUpdate(query, update, {
