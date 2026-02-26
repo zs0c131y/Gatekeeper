@@ -15,6 +15,10 @@ const { URL } = require("url");
 const crypto = require("crypto");
 
 const Config = require("../models/Config");
+const Route = require("../models/Route");
+const Alert = require("../models/Alert");
+const redisKeys = require("../config/redisKeys");
+const { getRedisClient } = require("../config/database");
 const { recordSuccess, recordFailure } = require("./circuitBreaker");
 const { enqueueLog } = require("../services/logQueue");
 
@@ -96,6 +100,65 @@ async function getGlobalCustomHeaders() {
 
   _customHeadersCachedAt = now;
   return _customHeadersCache;
+}
+
+let _ddosThresholdCache = null;
+let _ddosThresholdCachedAt = 0;
+
+async function getDdosThreshold() {
+  const now = Date.now();
+  if (_ddosThresholdCache !== null && now - _ddosThresholdCachedAt < 30_000) {
+    return _ddosThresholdCache;
+  }
+  try {
+    const doc = await Config.findOne({
+      key: "routing.ddos_threshold_rpm",
+      isActive: true,
+    }).lean();
+    _ddosThresholdCache = Number(doc?.value ?? 500);
+  } catch {
+    _ddosThresholdCache = 500;
+  }
+  _ddosThresholdCachedAt = now;
+  return _ddosThresholdCache;
+}
+
+async function checkDdos(routePath) {
+  const redis = getRedisClient();
+  if (!redis) return; // graceful degradation
+
+  try {
+    const key = redisKeys.ddosCounter(routePath);
+    const count = await redis.incr(key);
+    if (count === 1) {
+      // First request in window — set 60s TTL
+      await redis.expire(key, 60);
+    }
+
+    const threshold = await getDdosThreshold();
+    if (count > threshold) {
+      // Auto-disable the route. findOneAndUpdate is idempotent (only disables once).
+      const updated = await Route.findOneAndUpdate(
+        { path: routePath, isActive: true },
+        { isActive: false },
+        { returnDocument: "after" },
+      );
+
+      if (updated) {
+        await Alert.create({
+          type: "ddos",
+          message: `Route ${routePath} auto-disabled: ${count} req/min exceeded threshold ${threshold}`,
+          isRead: false,
+        });
+        console.warn(
+          `[DDoS] Auto-disabled route ${routePath}: ${count} req/min > ${threshold} threshold`,
+        );
+      }
+    }
+  } catch (err) {
+    // Never let DDoS check crash a proxied request
+    console.error("[DDoS] check error:", err.message);
+  }
 }
 
 function buildInjectedHeaders(route, globalHeaders) {
@@ -280,8 +343,16 @@ function createProxyMiddleware(backend, route) {
           ? parseInt(req.headers["content-length"], 10)
           : undefined,
       });
+
+      // Fire-and-forget DDoS check — never blocks the response
+      checkDdos(req.path).catch(() => {});
     }
   };
+}
+
+function invalidateDdosThresholdCache() {
+  _ddosThresholdCache = null;
+  _ddosThresholdCachedAt = 0;
 }
 
 module.exports = {
@@ -289,4 +360,5 @@ module.exports = {
   transformPath,
   getGlobalCustomHeaders,
   invalidateProxyConfigCache,
+  invalidateDdosThresholdCache,
 };

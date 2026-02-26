@@ -17,7 +17,10 @@ const {
 const {
   invalidateCircuitBreakerConfigCache,
 } = require("../src/middleware/circuitBreaker");
-const { invalidateProxyConfigCache } = require("../src/middleware/proxy");
+const {
+  invalidateProxyConfigCache,
+  invalidateDdosThresholdCache,
+} = require("../src/middleware/proxy");
 const { scoreToStatus } = require("../src/services/healthCheck");
 
 const router = Router();
@@ -42,6 +45,7 @@ function invalidateConfigDependents(key) {
   if (key.startsWith("rate_limiting.")) invalidateRateLimitConfigCache();
   if (key.startsWith("circuit_breaker.")) invalidateCircuitBreakerConfigCache();
   if (key === "routing.custom_headers") invalidateProxyConfigCache();
+  if (key === "routing.ddos_threshold_rpm") invalidateDdosThresholdCache();
 }
 
 async function upsertConfig(key, value, updatedBy) {
