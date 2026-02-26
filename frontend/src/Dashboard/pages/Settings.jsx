@@ -756,15 +756,58 @@ function BackendModal({ initial, onClose, onSubmit }) {
   );
 }
 
+function ConfirmDisableDialog({ route, onConfirm, onCancel }) {
+  if (!route) return null;
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="bg-[#111111] border-white/20 text-white max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-white">Disable Route?</DialogTitle>
+          <DialogDescription className="text-gray-400 space-y-1 pt-1">
+            <span className="block"><span className="font-mono text-amber-400">{route.method} {route.path}</span></span>
+            <span className="block text-sm">→ {route.backendId?.name ?? route.backendId}</span>
+            <span className="block text-sm text-red-400 pt-1">All traffic to this backend will stop immediately.</span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2 pt-2">
+          <Button onClick={onConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400">Disable Route</Button>
+          <Button onClick={onCancel} variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white">Cancel</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RoutesTab({ routes, backends, refetch }) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [confirmDisable, setConfirmDisable] = useState(null);
 
   const handleDelete = async (route) => {
     if (!window.confirm(`Delete route ${route.method} ${route.path}?`)) return;
     await api.deleteRoute(route._id);
     refetch();
   };
+
+  const handleUpdateRoute = async (id, payload) => {
+    await api.updateRoute(id, payload);
+    refetch();
+  };
+
+  function handleToggleActive(route) {
+    if (route.isActive) {
+      setConfirmDisable(route);
+    } else {
+      handleUpdateRoute(route._id, { isActive: true });
+    }
+  }
+
+  function handleConfirmDisable() {
+    if (confirmDisable) {
+      handleUpdateRoute(confirmDisable._id, { isActive: false });
+      setConfirmDisable(null);
+    }
+  }
 
   const handleSubmit = async (payload) => {
     if (editing) {
@@ -857,14 +900,16 @@ function RoutesTab({ routes, backends, refetch }) {
                       Auth
                     </Badge>
                   )}
-                  <Badge
-                    variant={
-                      route.isActive !== false ? "success" : "destructive"
-                    }
-                    className="text-xs"
+                  <button
+                    onClick={() => handleToggleActive(route)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      route.isActive
+                        ? "bg-emerald-500/20 text-emerald-400 hover:bg-red-500/20 hover:text-red-400"
+                        : "bg-red-500/20 text-red-400 hover:bg-emerald-500/20 hover:text-emerald-400"
+                    }`}
                   >
-                    {route.isActive !== false ? "Active" : "Off"}
-                  </Badge>
+                    {route.isActive ? "Active" : "Inactive"}
+                  </button>
                   <span className="text-xs text-gray-600">
                     p:{route.priority ?? 0}
                   </span>
@@ -907,6 +952,12 @@ function RoutesTab({ routes, backends, refetch }) {
           onSubmit={handleSubmit}
         />
       )}
+
+      <ConfirmDisableDialog
+        route={confirmDisable}
+        onConfirm={handleConfirmDisable}
+        onCancel={() => setConfirmDisable(null)}
+      />
     </div>
   );
 }
