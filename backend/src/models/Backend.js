@@ -28,6 +28,18 @@ const backendSchema = new mongoose.Schema(
       type: Number,
       default: 5000,
     },
+    healthyAbove: {
+      type: Number,
+      default: 80,
+      min: 0,
+      max: 100,
+    },
+    degradedAbove: {
+      type: Number,
+      default: 50,
+      min: 0,
+      max: 100,
+    },
     tags: {
       type: [String],
     },
