@@ -7,7 +7,7 @@ const API_BASE =
 
 /**
  * Hook that manages a Socket.io connection to the /dashboard namespace.
- * Returns { socket, connected, on, off }.
+ * Returns { connected, on, off }.
  */
 export function useWebSocket() {
   const socketRef = useRef(null);
@@ -42,7 +42,7 @@ export function useWebSocket() {
     socketRef.current?.off(event, handler);
   }, []);
 
-  return { socket: socketRef.current, connected, on, off };
+  return { connected, on, off };
 }
 
 export default useWebSocket;

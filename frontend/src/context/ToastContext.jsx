@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion"; // eslint-disable-line no-unused-vars
 import { X, CheckCircle, AlertTriangle, AlertCircle, Info } from "lucide-react";
 
 const ToastContext = createContext(null);
@@ -39,13 +39,13 @@ export function ToastProvider({ children }) {
     [removeToast],
   );
 
-  const toast = useCallback(
-    {
+  const toast = useMemo(
+    () => ({
       success: (msg, dur) => addToast(msg, "success", dur),
       error: (msg, dur) => addToast(msg, "error", dur),
       warning: (msg, dur) => addToast(msg, "warning", dur),
       info: (msg, dur) => addToast(msg, "info", dur),
-    },
+    }),
     [addToast],
   );
 
