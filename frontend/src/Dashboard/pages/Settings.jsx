@@ -321,19 +321,18 @@ function GeneralTab({ settings, onSave }) {
         />
       </div>
 
-      <div className="border-t border-white/10 pt-4">
-        <label className="block text-sm font-medium text-gray-300 mb-1">
-          DDoS Threshold (req/min)
-        </label>
-        <input
+      <div className="border-t border-white/10 pt-4 space-y-2">
+        <Label htmlFor="ddosThresholdRpm" className="text-gray-300">DDoS Threshold (req/min)</Label>
+        <Input
+          id="ddosThresholdRpm"
           type="number"
           min={10}
           max={100000}
           value={form.ddosThresholdRpm}
           onChange={(e) => setForm((f) => ({ ...f, ddosThresholdRpm: Number(e.target.value) }))}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30"
+          className="bg-white/5 border-white/10 text-white"
         />
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500">
           Requests per minute per route that triggers automatic route disable. Default: 500.
         </p>
       </div>
