@@ -11,6 +11,7 @@ import {
   Shield,
   Server,
   Route,
+  Zap,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
@@ -802,9 +803,13 @@ function RoutesTab({ routes, backends, refetch }) {
     }
   }
 
-  function handleConfirmDisable() {
+  async function handleKill(route) {
+    await handleUpdateRoute(route._id, { isActive: false });
+  }
+
+  async function handleConfirmDisable() {
     if (confirmDisable) {
-      handleUpdateRoute(confirmDisable._id, { isActive: false });
+      await handleUpdateRoute(confirmDisable._id, { isActive: false });
       setConfirmDisable(null);
     }
   }
@@ -916,6 +921,18 @@ function RoutesTab({ routes, backends, refetch }) {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleKill(route)}
+                    disabled={!route.isActive}
+                    title="Kill route immediately (no confirmation)"
+                    className={`p-1.5 rounded transition-all ${
+                      route.isActive
+                        ? "text-red-400 hover:text-red-300 hover:bg-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.4)] hover:shadow-[0_0_12px_rgba(239,68,68,0.6)]"
+                        : "text-gray-600 cursor-not-allowed opacity-40"
+                    }`}
+                  >
+                    <Zap className="h-4 w-4" />
+                  </button>
                   <Button
                     variant="outline"
                     size="sm"
