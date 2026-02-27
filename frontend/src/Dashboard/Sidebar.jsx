@@ -45,14 +45,14 @@ export function Sidebar({ collapsed, onToggle }) {
             </div>
             {!collapsed && (
               <span className="font-bold text-lg whitespace-nowrap">
-                Gatekeeper
+                [REDACTED]
               </span>
             )}
           </a>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2">
+        <nav className="flex-1 py-4 px-2" aria-label="Dashboard navigation">
           {navItems.map((item) =>
             collapsed ? (
               <Tooltip key={item.path}>
