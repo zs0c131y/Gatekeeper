@@ -14,6 +14,9 @@
 const redisKeys = require("../config/redisKeys");
 const { getRedisClient } = require("../config/database");
 const Config = require("../models/Config");
+const logger = require("../utils/logger");
+const { emitCircuitChange } = require("../services/websocket");
+const { createAlert } = require("../services/alertService");
 
 const STATES = Object.freeze({
   CLOSED: "CLOSED",
@@ -115,11 +118,23 @@ async function recordSuccess(backendName) {
 
   const state = await redis.get(redisKeys.circuitState(backendName));
   if (state === STATES.HALF_OPEN || state === STATES.OPEN) {
+    const prevState = state;
     await redis.set(redisKeys.circuitState(backendName), STATES.CLOSED);
     await redis.del(redisKeys.circuitFailureCount(backendName));
     await redis.del(redisKeys.circuitLastFailure(backendName));
     await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
-    console.log(`[CircuitBreaker] ${backendName} -> CLOSED`);
+    logger.info(`[CircuitBreaker] ${backendName}: ${prevState} -> CLOSED`);
+    emitCircuitChange({
+      backend: backendName,
+      from: prevState,
+      to: STATES.CLOSED,
+      timestamp: new Date().toISOString(),
+    });
+    createAlert("info", `Circuit breaker ${backendName} recovered (${prevState} -> CLOSED)`, {
+      source: "circuit_breaker",
+      ruleName: "Circuit Breaker State Changes",
+      metadata: { backend: backendName, from: prevState, to: STATES.CLOSED },
+    }).catch(() => {});
   }
 }
 
@@ -140,12 +155,31 @@ async function recordFailure(backendName) {
   if (failures >= failureThreshold && currentState !== STATES.OPEN) {
     await redis.set(redisKeys.circuitState(backendName), STATES.OPEN);
     await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
-    console.warn(`[CircuitBreaker] ${backendName} -> OPEN (failures=${failures})`);
+    logger.warn(`[CircuitBreaker] ${backendName}: ${currentState} -> OPEN (failures=${failures})`);
+    emitCircuitChange({
+      backend: backendName,
+      from: currentState,
+      to: STATES.OPEN,
+      reason: `failure threshold exceeded (${failures}/${failureThreshold})`,
+      timestamp: new Date().toISOString(),
+    });
+    createAlert("warning", `Circuit breaker OPENED for ${backendName} (${failures} failures)`, {
+      source: "circuit_breaker",
+      ruleName: "Circuit Breaker State Changes",
+      metadata: { backend: backendName, failures, threshold: failureThreshold },
+    }).catch(() => {});
   } else if (currentState === STATES.HALF_OPEN) {
     await redis.set(redisKeys.circuitState(backendName), STATES.OPEN);
     await redis.set(redisKeys.circuitLastFailure(backendName), String(Date.now()));
     await redis.del(redisKeys.circuitHalfOpenCalls(backendName));
-    console.warn(`[CircuitBreaker] ${backendName} -> OPEN (probe failed)`);
+    logger.warn(`[CircuitBreaker] ${backendName}: HALF_OPEN -> OPEN (probe failed)`);
+    emitCircuitChange({
+      backend: backendName,
+      from: STATES.HALF_OPEN,
+      to: STATES.OPEN,
+      reason: "probe request failed",
+      timestamp: new Date().toISOString(),
+    });
   }
 }
 

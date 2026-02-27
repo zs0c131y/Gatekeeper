@@ -16,11 +16,14 @@ const crypto = require("crypto");
 
 const Config = require("../models/Config");
 const Route = require("../models/Route");
-const Alert = require("../models/Alert");
 const redisKeys = require("../config/redisKeys");
 const { getRedisClient } = require("../config/database");
 const { recordSuccess, recordFailure } = require("./circuitBreaker");
 const { enqueueLog } = require("../services/logQueue");
+const logger = require("../utils/logger");
+const { recordRequest, emitError, emitLog } = require("../services/websocket");
+const { recordClientRequest } = require("../services/clientProfiler");
+const { createAlert } = require("../services/alertService");
 
 let _customHeadersCache = null;
 let _customHeadersCachedAt = 0;
@@ -33,9 +36,11 @@ function invalidateProxyConfigCache() {
 function transformPath(incomingPath, route) {
   let path = incomingPath;
 
-  console.log(
-    `[proxy] transformPath: incomingPath="${incomingPath}" stripPrefix="${route.stripPrefix}" addPrefix="${route.addPrefix}"`,
-  );
+  logger.debug("[proxy] transformPath", {
+    incomingPath,
+    stripPrefix: route.stripPrefix,
+    addPrefix: route.addPrefix,
+  });
 
   if (route.stripPrefix && path.startsWith(route.stripPrefix)) {
     path = path.slice(route.stripPrefix.length) || "/";
@@ -45,7 +50,7 @@ function transformPath(incomingPath, route) {
     path = route.addPrefix + path;
   }
 
-  console.log(`[proxy] transformPath: result="${path}"`);
+  logger.debug("[proxy] transformPath result", { path });
   return path || "/";
 }
 
@@ -145,19 +150,19 @@ async function checkDdos(routePath) {
       );
 
       if (updated) {
-        await Alert.create({
-          type: "ddos",
-          message: `Route ${routePath} auto-disabled: ${count} req/min exceeded threshold ${threshold}`,
-          isRead: false,
+        createAlert("ddos", `Route ${routePath} auto-disabled: ${count} req/min exceeded threshold ${threshold}`, {
+          source: "ddos_protection",
+          metadata: { routePath, count, threshold },
+        }).catch(() => {});
+        logger.warn("[DDoS] Auto-disabled route", {
+          routePath,
+          count,
+          threshold,
         });
-        console.warn(
-          `[DDoS] Auto-disabled route ${routePath}: ${count} req/min > ${threshold} threshold`,
-        );
       }
     }
   } catch (err) {
-    // Never let DDoS check crash a proxied request
-    console.error("[DDoS] check error:", err.message);
+    logger.error("[DDoS] check error", { error: err.message });
   }
 }
 
@@ -324,8 +329,9 @@ function createProxyMiddleware(backend, route) {
       }
     } finally {
       const latency = Date.now() - start;
+      const isError = statusCode >= 400;
 
-      writeLog({
+      const logEntry = {
         traceId,
         timestamp: new Date(),
         method: req.method,
@@ -342,9 +348,33 @@ function createProxyMiddleware(backend, route) {
         requestSize: req.headers["content-length"]
           ? parseInt(req.headers["content-length"], 10)
           : undefined,
-      });
+      };
 
-      // Fire-and-forget DDoS check — never blocks the response
+      writeLog(logEntry);
+
+      // Emit to WebSocket clients
+      recordRequest(latency, isError);
+      emitLog(logEntry);
+
+      if (isError && statusCode >= 500) {
+        emitError({
+          traceId,
+          endpoint: req.path,
+          status: statusCode,
+          message: errorMessage,
+          backend: backend.name,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Client behavior profiling
+      const clientId =
+        req.apiKey?.clientId || req.ip || req.socket?.remoteAddress || "unknown";
+      recordClientRequest(clientId, req.apiKey ? "apikey" : "ip", {
+        latency,
+      }).catch(() => {});
+
+      // Fire-and-forget DDoS check
       checkDdos(req.path).catch(() => {});
     }
   };

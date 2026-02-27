@@ -14,6 +14,8 @@
 const redisKeys = require("../config/redisKeys");
 const { getRedisClient } = require("../config/database");
 const Config = require("../models/Config");
+const logger = require("../utils/logger");
+const { recordViolation } = require("../services/clientProfiler");
 
 let _configCache = null;
 let _cachedAt = 0;
@@ -191,6 +193,7 @@ function rateLimitMiddleware(limitRpm = null) {
 
       if (!allowed) {
         res.setHeader("Retry-After", String(retryAfter));
+        recordViolation(clientId).catch(() => {});
         return res.status(429).json({
           error: "Rate limit exceeded",
           code: "RATE_LIMITED",
@@ -200,8 +203,7 @@ function rateLimitMiddleware(limitRpm = null) {
 
       next();
     } catch (err) {
-      // Fail-open so rate limit infrastructure failures do not break traffic.
-      console.error("[RateLimit] failed-open:", err.message);
+      logger.error("[RateLimit] failed-open", { error: err.message });
       next();
     }
   };

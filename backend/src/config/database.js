@@ -1,15 +1,12 @@
 const mongoose = require("mongoose");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const Redis = require("ioredis");
+const logger = require("../utils/logger");
 
 let mongoClient = null;
 let mongoDB = null;
 let redisClient = null;
 
-/**
- * Connect to MongoDB using native MongoDB driver (fallback if Mongoose fails).
- * Connection string is read from process.env.MONGODB_URI.
- */
 async function connectMongoDBNative() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
@@ -28,27 +25,18 @@ async function connectMongoDBNative() {
     });
 
     await mongoClient.connect();
-
-    // Send a ping to confirm successful connection
     await mongoClient.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
-    );
+    logger.info("Connected to MongoDB (native driver)");
 
     mongoDB = mongoClient.db();
-    console.log("Connected to MongoDB (native driver)");
-    console.log("Database:", mongoDB.databaseName);
+    logger.info("Database: " + mongoDB.databaseName);
     return mongoDB;
   } catch (err) {
-    console.error("MongoDB native connection failed:", err.message);
+    logger.error("MongoDB native connection failed", { error: err.message });
     throw err;
   }
 }
 
-/**
- * Connect to MongoDB using Mongoose.
- * Connection string is read from process.env.MONGODB_URI.
- */
 async function connectMongoDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
@@ -56,7 +44,6 @@ async function connectMongoDB() {
   }
 
   try {
-    // Try Mongoose first with Stable API
     await mongoose.connect(uri, {
       serverApi: {
         version: ServerApiVersion.v1,
@@ -66,27 +53,21 @@ async function connectMongoDB() {
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
     });
-    console.log("Connected to MongoDB via Mongoose");
-    console.log("Database:", mongoose.connection.db.databaseName);
+    logger.info("Connected to MongoDB via Mongoose");
+    logger.info("Database: " + mongoose.connection.db.databaseName);
   } catch (mongooseErr) {
-    console.error("Mongoose connection failed:", mongooseErr.message);
-    console.log("Attempting native MongoDB driver...");
+    logger.error("Mongoose connection failed", { error: mongooseErr.message });
+    logger.info("Attempting native MongoDB driver...");
 
-    // Fallback to native driver
     try {
       await connectMongoDBNative();
     } catch (nativeErr) {
-      console.error("Both Mongoose and native driver failed");
+      logger.error("Both Mongoose and native driver failed");
       throw nativeErr;
     }
   }
 }
 
-/**
- * Connect to Redis using ioredis.
- * Connection string is read from process.env.REDIS_URL.
- * @returns {Redis|null} The Redis client instance, or null if unavailable.
- */
 async function connectRedis() {
   const url = process.env.REDIS_URL;
   if (!url) {
@@ -97,17 +78,15 @@ async function connectRedis() {
     redisClient = new Redis(url, {
       connectTimeout: 5000,
       maxRetriesPerRequest: 0,
-      retryStrategy: () => null, // Disable retries
+      retryStrategy: () => null,
       lazyConnect: true,
     });
 
     redisClient.on("connect", () => {
-      console.log("Connected to Redis");
+      logger.info("Connected to Redis");
     });
 
-    redisClient.on("error", () => {
-      // Suppress repeated errors - handled via connect() rejection
-    });
+    redisClient.on("error", () => {});
 
     redisClient
       .connect()
@@ -115,33 +94,21 @@ async function connectRedis() {
         resolve(redisClient);
       })
       .catch((err) => {
-        console.error("Redis connection failed:", err.message);
+        logger.error("Redis connection failed", { error: err.message });
         redisClient = null;
         reject(err);
       });
   });
 }
 
-/**
- * Get the existing Redis client instance.
- * @returns {Redis|null}
- */
 function getRedisClient() {
   return redisClient;
 }
 
-/**
- * Get the MongoDB database instance.
- * @returns {Db|null}
- */
 function getMongoDatabase() {
   return mongoDB;
 }
 
-/**
- * Get the MongoDB client instance.
- * @returns {MongoClient|null}
- */
 function getMongoClient() {
   return mongoClient;
 }

@@ -10,6 +10,7 @@ const Backend = require("../models/Backend");
 const Config = require("../models/Config");
 const redisKeys = require("../config/redisKeys");
 const { getRedisClient } = require("../config/database");
+const logger = require("../utils/logger");
 
 let _timer = null;
 
@@ -29,7 +30,7 @@ function probeBackend(backend) {
         path: targetUrl.pathname + targetUrl.search,
         method: "GET",
         timeout,
-        headers: { "User-Agent": "Gatekeeper-HealthCheck/1.0" },
+        headers: { "User-Agent": "[REDACTED]-HealthCheck/1.0" },
       },
       (res) => {
         res.resume();
@@ -61,9 +62,9 @@ async function checkBackend(backend) {
     } else {
       _memScores.set(backend.name, score);
     }
-    console.log(`[HealthCheck] ${backend.name}: score=${score}`);
+    logger.debug(`[HealthCheck] ${backend.name}: score=${score}`);
   } catch (err) {
-    console.error(`[HealthCheck] ${backend.name} error:`, err.message);
+    logger.error(`[HealthCheck] ${backend.name} error`, { error: err.message });
   }
 }
 
@@ -78,7 +79,7 @@ async function runHealthChecks() {
     const backends = await Backend.find({ isActive: true }).lean();
     await Promise.allSettled(backends.map(checkBackend));
   } catch (err) {
-    console.error("[HealthCheck] Failed to fetch backends:", err.message);
+    logger.error("[HealthCheck] Failed to fetch backends", { error: err.message });
   }
 }
 
@@ -106,7 +107,7 @@ async function startHealthCheckLoop() {
     if (typeof _timer.unref === "function") _timer.unref();
   }
 
-  console.log("[HealthCheck] Starting health check loop");
+  logger.info("[HealthCheck] Starting health check loop");
   await runHealthChecks();
   await schedule();
 }
@@ -115,7 +116,7 @@ function stopHealthCheckLoop() {
   if (_timer) {
     clearTimeout(_timer);
     _timer = null;
-    console.log("[HealthCheck] Loop stopped");
+    logger.info("[HealthCheck] Loop stopped");
   }
 }
 

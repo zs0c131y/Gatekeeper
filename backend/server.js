@@ -1,7 +1,9 @@
 const express = require("express");
+const http = require("http");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+const logger = require("./src/utils/logger");
 const {
   connectMongoDB,
   connectRedis,
@@ -15,6 +17,7 @@ const errorHandler = require("./src/middleware/errorHandler");
 const seed = require("./src/config/seed");
 const { initAuth, getAuth } = require("./src/lib/auth");
 const { toNodeHandler } = require("better-auth/node");
+const { initWebSocket } = require("./src/services/websocket");
 
 const overviewRoutes = require("./routes/overview");
 const analyticsRoutes = require("./routes/analytics");
@@ -32,6 +35,7 @@ const {
 } = require("./src/services/analyticsAggregator");
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // ── Phase 1: Security headers + CORS (must precede the auth handler) ─────────
@@ -56,7 +60,7 @@ app.all("/api/auth/*", (req, res) => {
 applyBodyParsing(app);
 
 app.get("/", (_req, res) =>
-  res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
+  res.json({ message: "[REDACTED] API is running", version: "1.0.0" }),
 );
 
 app.get("/health", (_req, res) =>
@@ -115,28 +119,28 @@ async function start() {
       await connectRedis();
       redisClient = getRedisClient();
     } catch (err) {
-      // Graceful degradation: continue without Redis-backed features.
-      console.warn("Redis unavailable, running in degraded mode:", err.message);
+      logger.warn("Redis unavailable, running in degraded mode", {
+        error: err.message,
+      });
     }
 
-    // Initialise better-auth now that the DB (and optionally Redis) is ready.
-    // mongoose.connection.db is the native Db instance.
     initAuth(mongoose.connection.db, redisClient);
+    initWebSocket(server);
 
     await seed();
     await startHealthCheckLoop();
     startLogQueue();
     startAnalyticsAggregationLoop();
 
-    app.listen(PORT, () => {
-      console.log(`Gatekeeper API running on http://localhost:${PORT}`);
+    server.listen(PORT, () => {
+      logger.info(`Gateway API running on http://localhost:${PORT}`);
     });
   } catch (err) {
-    console.error("Failed to start server:", err.message);
+    logger.error("Failed to start server", { error: err.message });
     process.exit(1);
   }
 }
 
 start();
 
-module.exports = app;
+module.exports = { app, server };
