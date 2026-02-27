@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "mcp__plugin_playwright_playwright__browser_click",
-      "mcp__plugin_playwright_playwright__browser_wait_for"
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "Bash(cd:*)",
+      "Bash(curl:*)",
+      "Bash(echo Syntax OK:*)",
+      "Bash(git:*)"
     ]
   }
 }
