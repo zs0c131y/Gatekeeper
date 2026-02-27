@@ -83,7 +83,9 @@ export function Sidebar({ collapsed, onToggle }) {
                       <span
                         className={cn(
                           "font-medium whitespace-nowrap transition-all duration-300 overflow-hidden",
-                          collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-xs",
+                          collapsed
+                            ? "opacity-0 max-w-0"
+                            : "opacity-100 max-w-xs",
                         )}
                       >
                         {item.name}
@@ -113,7 +115,9 @@ export function Sidebar({ collapsed, onToggle }) {
               ) : (
                 <>
                   <ChevronLeft className="w-5 h-5 transform group-hover:-translate-x-0.5 transition-transform" />
-                  <span className="text-sm font-medium whitespace-nowrap">Collapse</span>
+                  <span className="text-sm font-medium whitespace-nowrap">
+                    Collapse
+                  </span>
                 </>
               )}
             </button>
