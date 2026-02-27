@@ -59,7 +59,7 @@ async function connectMongoDB() {
     // Try Mongoose first with Stable API
     await mongoose.connect(uri, {
       serverApi: {
-        version: ServerApiVersion.v1, temp1
+        version: ServerApiVersion.v1,
         strict: true,
         deprecationErrors: true,
       },
