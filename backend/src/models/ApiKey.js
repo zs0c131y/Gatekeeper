@@ -39,6 +39,7 @@ const apiKeySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+apiKeySchema.index({ keyHash: 1 }, { unique: true });
 apiKeySchema.index({ keyPrefix: 1 });
 apiKeySchema.index({ clientId: 1 });
 
