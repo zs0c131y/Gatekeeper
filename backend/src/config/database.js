@@ -59,11 +59,11 @@ async function connectMongoDB() {
     // Try Mongoose first with Stable API
     await mongoose.connect(uri, {
       serverApi: {
-        version: ServerApiVersion.v1,
+        version: ServerApiVersion.v1, temp1
         strict: true,
         deprecationErrors: true,
       },
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
     });
     console.log("Connected to MongoDB via Mongoose");
