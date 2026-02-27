@@ -8,7 +8,9 @@ import {
   Shield,
   Eye,
   RefreshCw,
+  Download,
 } from "lucide-react";
+import { downloadCSV, downloadJSON } from "../../utils/export";
 import { Badge } from "@/components/ui/badge";
 import {
   BarChart,
@@ -196,6 +198,29 @@ export function Analytics() {
               className={cn("w-4 h-4 mr-2", autoRefresh && "animate-spin")}
             />
             {autoRefresh ? "Auto-Refresh On" : "Auto-Refresh Off"}
+          </Button>
+
+          <Button
+            onClick={() => {
+              const exportData = {
+                kpi,
+                latencyDistribution,
+                methodBreakdown,
+                endpointPerformance,
+                hourlyTraffic,
+                topErrorEndpoints,
+                clients,
+                exportedAt: new Date().toISOString(),
+                range: `${hours}h`,
+              };
+              downloadJSON(exportData, `analytics_${hours}h.json`);
+            }}
+            variant="outline"
+            size="sm"
+            className="bg-white/5 hover:bg-white/10 border-white/10 text-white"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
           </Button>
         </div>
       </div>
