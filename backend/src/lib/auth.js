@@ -100,6 +100,16 @@ function initAuth(db, redisClient) {
   _auth = betterAuth({
     database: mongodbAdapter(db),
 
+    session: {
+      // Sessions last 7 days; rolling window resets on each visit.
+      expiresIn: 60 * 60 * 24 * 7, // 7 days (seconds)
+      updateAge: 60 * 60 * 24, // refresh cookie after 1 day of activity
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 5, // client-side cache for 5 min (reduces DB reads)
+      },
+    },
+
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
