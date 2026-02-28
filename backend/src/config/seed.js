@@ -141,7 +141,36 @@ async function seed() {
 
     console.log("Seeded default admin user");
   } else {
-    console.log("Admin user already exists, skipping");
+    // User already exists — re-hash and overwrite the credential-account password
+    // so the hard-coded dev credentials always work after a fresh checkout.
+    console.log("Admin user already exists — resetting password to default");
+    try {
+      const ctx = await auth.$context;
+      const newHash = await ctx.password.hash(DEFAULT_ADMIN.password);
+
+      // better-auth MongoDB adapter stores the credential account with
+      // providerId = "credential" and userId = <user's string id>.
+      const userId = existing.id ?? existing._id?.toString();
+      const updated = await db.collection("account").updateOne(
+        { providerId: "credential", userId },
+        { $set: { password: newHash } },
+      );
+
+      if (updated.matchedCount === 0) {
+        // Fall back to accountId field (some better-auth adapter versions use this)
+        await db.collection("account").updateOne(
+          { providerId: "credential", accountId: userId },
+          { $set: { password: newHash } },
+        );
+      }
+
+      // Also ensure the role field is set to admin
+      await db
+        .collection("user")
+        .updateOne({ id: userId }, { $set: { role: "admin" } });
+    } catch (err) {
+      console.warn("Could not reset admin password:", err.message);
+    }
   }
 
   // Seed config documents

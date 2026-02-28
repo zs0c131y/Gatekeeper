@@ -127,14 +127,10 @@ function initAuth(db, redisClient) {
       deleteUser: {
         enabled: true,
       },
-      additionalFields: {
-        role: {
-          type: "string",
-          required: false,
-          defaultValue: "user",
-          input: false,
-        },
-      },
+      // NOTE: `role` is intentionally NOT listed here as an additionalField.
+      // The `admin` plugin (below) owns the `role` field.  Defining it in both
+      // places causes a duplicate-field conflict in better-auth v1.x which can
+      // silently break signUpEmail / signInEmail.
     },
 
     plugins: [
