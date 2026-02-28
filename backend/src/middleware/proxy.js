@@ -299,7 +299,9 @@ function createProxyMiddleware(backend, route) {
     const upstreamPath = transformPath(req.path, route);
 
     req.traceId = traceId;
+    res.setHeader("X-Gateway-Id", process.env.GATEWAY_ID || "gateway-1");
     res.setHeader("X-Trace-Id", traceId);
+    res.setHeader("X-Request-Id", traceId);
     if (req.traceparent) res.setHeader("Traceparent", req.traceparent);
 
     let statusCode = 502;
