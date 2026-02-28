@@ -60,7 +60,7 @@ app.all("/api/auth/*", (req, res) => {
 applyBodyParsing(app);
 
 app.get("/", (_req, res) =>
-  res.json({ message: "[REDACTED] API is running", version: "1.0.0" }),
+  res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
 );
 
 app.get("/health", (_req, res) =>
@@ -88,7 +88,9 @@ app.get("/api/status", async (_req, res) => {
   try {
     totalBackends = await Backend.countDocuments();
     activeBackends = await Backend.countDocuments({ isActive: true });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   let requestCount = 0;
   let avgLatency = 0;
@@ -96,13 +98,17 @@ app.get("/api/status", async (_req, res) => {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const stats = await Log.aggregate([
       { $match: { timestamp: { $gte: oneHourAgo } } },
-      { $group: { _id: null, count: { $sum: 1 }, avgLat: { $avg: "$latency" } } },
+      {
+        $group: { _id: null, count: { $sum: 1 }, avgLat: { $avg: "$latency" } },
+      },
     ]);
     if (stats.length > 0) {
       requestCount = stats[0].count;
       avgLatency = Math.round(stats[0].avgLat || 0);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   res.json({
     status: "ok",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Zap, Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function Login() {
-  const { login, loading } = useAuth();
+  const { login, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard";
@@ -16,6 +16,16 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Navigate only once better-auth confirms the session is active.
+  // Calling navigate() immediately after signIn() can race against the
+  // useSession() re-validation and hit ProtectedRoute before the cookie
+  // is reflected, causing a redirect back to /login.
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, from]);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -29,11 +39,12 @@ export default function Login() {
       return;
     }
     const result = await login(form.email, form.password);
-    if (result.success) {
-      navigate(from, { replace: true });
-    } else {
-      setFormError(result.error || "Incorrect email or password. Please try again.");
+    if (!result.success) {
+      setFormError(
+        result.error || "Incorrect email or password. Please try again.",
+      );
     }
+    // Navigation is handled by the useEffect above once the session is confirmed.
   };
 
   return (
@@ -174,7 +185,6 @@ export default function Login() {
             </div>
           </form>
         </div>
-
       </div>
     </div>
   );

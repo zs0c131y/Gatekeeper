@@ -44,8 +44,8 @@ export function Sidebar({ collapsed, onToggle }) {
               <Zap className="w-5 h-5 text-black" />
             </div>
             {!collapsed && (
-              <span className="font-bold text-lg whitespace-nowrap">
-                [REDACTED]
+              <span className="font-bold text-lg whitespace-nowrap text-white">
+                Gatekeeper
               </span>
             )}
           </a>
@@ -62,10 +62,10 @@ export function Sidebar({ collapsed, onToggle }) {
                     end={item.path === "/dashboard"}
                     className={({ isActive }) =>
                       cn(
-                        "flex items-center justify-center gap-3 px-3 py-3 rounded-lg mb-1 transition-all duration-200",
+                        "flex items-center justify-center px-3 py-3 rounded-lg mb-1 transition-all duration-200 border",
                         isActive
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          : "text-gray-400 hover:bg-white/5 hover:text-white",
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30 shadow-sm shadow-amber-500/10"
+                          : "text-gray-500 border-white/8 hover:bg-white/5 hover:text-gray-300 hover:border-white/15",
                       )
                     }
                   >

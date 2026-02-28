@@ -21,7 +21,10 @@ const {
   invalidateProxyConfigCache,
   invalidateDdosThresholdCache,
 } = require("../src/middleware/proxy");
-const { scoreToStatus } = require("../src/services/healthCheck");
+const {
+  scoreToStatus,
+  getMemoryScore,
+} = require("../src/services/healthCheck");
 
 const router = Router();
 
@@ -122,9 +125,19 @@ async function getBackendsView() {
         score = raw !== null ? parseInt(raw, 10) : null;
       }
 
-      const circuitState = redis
-        ? (await redis.get(redisKeys.circuitState(b.name))) || "CLOSED"
-        : "CLOSED";
+      // When Redis is available, read the authoritative circuit breaker state.
+      // When Redis is unavailable, derive the state from the in-memory health
+      // score so that unreachable backends don't wrongly appear as "Normal".
+      let circuitState;
+      if (redis) {
+        circuitState =
+          (await redis.get(redisKeys.circuitState(b.name))) || "CLOSED";
+      } else {
+        const memScore = getMemoryScore(b.name);
+        // null score = not yet probed → default to CLOSED (healthy assumption).
+        // score < 20 = probe failed / unreachable → surface as OPEN.
+        circuitState = memScore === null || memScore >= 20 ? "CLOSED" : "OPEN";
+      }
 
       const status = scoreToStatus(score, {
         healthyAbove: b.healthyAbove,
@@ -385,8 +398,10 @@ router.put(
       if (weight !== undefined) update.weight = weight;
       if (timeout !== undefined) update.timeout = timeout;
       if (isActive !== undefined) update.isActive = isActive;
-      if (req.body.healthyAbove !== undefined) update.healthyAbove = req.body.healthyAbove;
-      if (req.body.degradedAbove !== undefined) update.degradedAbove = req.body.degradedAbove;
+      if (req.body.healthyAbove !== undefined)
+        update.healthyAbove = req.body.healthyAbove;
+      if (req.body.degradedAbove !== undefined)
+        update.degradedAbove = req.body.degradedAbove;
 
       const query = id ? { _id: id } : { name: nameOrId };
       const updated = await Backend.findOneAndUpdate(query, update, {

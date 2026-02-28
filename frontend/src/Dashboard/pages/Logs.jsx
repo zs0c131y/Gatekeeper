@@ -276,7 +276,7 @@ export function Logs() {
     if (!liveUpdates || isPaused) return;
     if (!canStream) return;
 
-    const baseUrl = import.meta.env.VITE_API_URL || "[REDACTED]";
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
     const streamUrl = `${baseUrl}/api/logs/stream/live${routesOnly ? "?routesOnly=true" : ""}`;
     const es = new EventSource(streamUrl);
 
@@ -445,9 +445,19 @@ export function Logs() {
                     setActiveQuick(filter.value);
                     const now = new Date();
                     if (filter.value === "errors") {
-                      setFilters((prev) => ({ ...prev, status: "500", from: "", to: "" }));
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: "500",
+                        from: "",
+                        to: "",
+                      }));
                     } else if (filter.value === "slow") {
-                      setFilters((prev) => ({ ...prev, status: "", from: "", to: "" }));
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: "",
+                        from: "",
+                        to: "",
+                      }));
                     } else if (filter.value === "hour") {
                       const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
                       setFilters((prev) => ({

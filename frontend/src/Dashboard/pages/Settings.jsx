@@ -322,18 +322,23 @@ function GeneralTab({ settings, onSave }) {
       </div>
 
       <div className="border-t border-white/10 pt-4 space-y-2">
-        <Label htmlFor="ddosThresholdRpm" className="text-gray-300">DDoS Threshold (req/min)</Label>
+        <Label htmlFor="ddosThresholdRpm" className="text-gray-300">
+          DDoS Threshold (req/min)
+        </Label>
         <Input
           id="ddosThresholdRpm"
           type="number"
           min={10}
           max={100000}
           value={form.ddosThresholdRpm}
-          onChange={(e) => setForm((f) => ({ ...f, ddosThresholdRpm: Number(e.target.value) }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, ddosThresholdRpm: Number(e.target.value) }))
+          }
           className="bg-white/5 border-white/10 text-white"
         />
         <p className="text-xs text-gray-500">
-          Requests per minute per route that triggers automatic route disable. Default: 500.
+          Requests per minute per route that triggers automatic route disable.
+          Default: 500.
         </p>
       </div>
 
@@ -504,7 +509,13 @@ function CircuitBreakersTab({ settings, backends, onSave }) {
                           : "warning"
                     }
                   >
-                    {b.circuitState || "CLOSED"}
+                    {b.circuitState === "CLOSED"
+                      ? "Normal"
+                      : b.circuitState === "OPEN"
+                        ? "Tripped"
+                        : b.circuitState === "HALF_OPEN"
+                          ? "Testing"
+                          : "Normal"}
                   </Badge>
                 </div>
               ))}
@@ -718,7 +729,10 @@ function BackendModal({ initial, onClose, onSubmit }) {
                   max={100}
                   value={form.healthyAbove}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, healthyAbove: Number(e.target.value) }))
+                    setForm((f) => ({
+                      ...f,
+                      healthyAbove: Number(e.target.value),
+                    }))
                   }
                   className="bg-white/5 border-white/10 text-white h-8 text-sm"
                 />
@@ -733,7 +747,10 @@ function BackendModal({ initial, onClose, onSubmit }) {
                   max={100}
                   value={form.degradedAbove}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, degradedAbove: Number(e.target.value) }))
+                    setForm((f) => ({
+                      ...f,
+                      degradedAbove: Number(e.target.value),
+                    }))
                   }
                   className="bg-white/5 border-white/10 text-white h-8 text-sm"
                 />
@@ -782,14 +799,33 @@ function ConfirmDisableDialog({ route, onConfirm, onCancel }) {
         <DialogHeader>
           <DialogTitle className="text-white">Disable Route?</DialogTitle>
           <DialogDescription className="text-gray-400 space-y-1 pt-1">
-            <span className="block"><span className="font-mono text-amber-400">{route.method} {route.path}</span></span>
-            <span className="block text-sm">→ {route.backendId?.name ?? route.backendId}</span>
-            <span className="block text-sm text-red-400 pt-1">All traffic to this backend will stop immediately.</span>
+            <span className="block">
+              <span className="font-mono text-amber-400">
+                {route.method} {route.path}
+              </span>
+            </span>
+            <span className="block text-sm">
+              → {route.backendId?.name ?? route.backendId}
+            </span>
+            <span className="block text-sm text-red-400 pt-1">
+              All traffic to this backend will stop immediately.
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div className="flex gap-2 pt-2">
-          <Button onClick={onConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400">Disable Route</Button>
-          <Button onClick={onCancel} variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white">Cancel</Button>
+          <Button
+            onClick={onConfirm}
+            className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400"
+          >
+            Disable Route
+          </Button>
+          <Button
+            onClick={onCancel}
+            variant="outline"
+            className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+          >
+            Cancel
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
