@@ -18,6 +18,9 @@ const AUTO_BLOCK_VIOLATION_THRESHOLD = 50;
 async function recordClientRequest(clientId, clientType, opts = {}) {
   try {
     const now = new Date();
+
+    const existing = await ClientProfile.findOne({ clientId }, { lastSeen: 1, totalRequests: 1, avgRequestInterval: 1 }).lean();
+
     const update = {
       $inc: { totalRequests: 1 },
       $set: { lastSeen: now },
@@ -30,11 +33,21 @@ async function recordClientRequest(clientId, clientType, opts = {}) {
         blockedRequests: 0,
         rateLimitViolations: 0,
         behaviorScore: 100,
+        avgRequestInterval: 0,
       },
     };
 
     if (opts.latency) {
       update.$set.avgLatency = opts.latency;
+    }
+
+    if (existing && existing.lastSeen) {
+      const interval = now.getTime() - new Date(existing.lastSeen).getTime();
+      const prevAvg = existing.avgRequestInterval || 0;
+      const count = existing.totalRequests || 1;
+      update.$set.avgRequestInterval = Math.round(
+        (prevAvg * (count - 1) + interval) / count,
+      );
     }
 
     await ClientProfile.findOneAndUpdate({ clientId }, update, {

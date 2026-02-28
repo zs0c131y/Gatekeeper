@@ -24,6 +24,7 @@ const logger = require("../utils/logger");
 const { recordRequest, emitError, emitLog } = require("../services/websocket");
 const { recordClientRequest } = require("../services/clientProfiler");
 const { createAlert } = require("../services/alertService");
+const { recordTrafficMetrics } = require("./rateLimit");
 
 let _customHeadersCache = null;
 let _customHeadersCachedAt = 0;
@@ -224,6 +225,7 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
         req.ip || req.socket?.remoteAddress || "";
       forwardHeaders["x-forwarded-proto"] = req.protocol || "http";
       forwardHeaders["x-forwarded-host"] = req.hostname || "";
+      forwardHeaders["x-gateway-id"] = process.env.GATEWAY_ID || "gateway-1";
       forwardHeaders["x-request-id"] =
         req.traceId || crypto.randomBytes(8).toString("hex");
       forwardHeaders["x-trace-id"] = req.traceId;
@@ -302,6 +304,7 @@ function createProxyMiddleware(backend, route) {
 
     let statusCode = 502;
     let errorMessage;
+    let errorStack;
 
     try {
       const result = await forwardRequest(
@@ -317,6 +320,7 @@ function createProxyMiddleware(backend, route) {
       else await recordSuccess(backend.name);
     } catch (err) {
       errorMessage = err.message;
+      errorStack = err.stack;
       await recordFailure(backend.name);
 
       if (!res.headersSent) {
@@ -344,6 +348,7 @@ function createProxyMiddleware(backend, route) {
         apiKeyId: req.apiKey?._id ?? undefined,
         userId: req.user?.userId ?? undefined,
         errorMessage,
+        errorStack,
         source: "gateway",
         requestSize: req.headers["content-length"]
           ? parseInt(req.headers["content-length"], 10)
@@ -373,6 +378,9 @@ function createProxyMiddleware(backend, route) {
       recordClientRequest(clientId, req.apiKey ? "apikey" : "ip", {
         latency,
       }).catch(() => {});
+
+      // Record traffic metrics for adaptive rate limiting
+      recordTrafficMetrics(req.path, latency, isError).catch(() => {});
 
       // Fire-and-forget DDoS check
       checkDdos(req.path).catch(() => {});

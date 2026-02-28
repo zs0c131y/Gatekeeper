@@ -22,6 +22,7 @@ function probeBackend(backend) {
     const targetUrl = new URL(backend.healthCheckPath || "/health", backend.baseUrl);
     const transport = targetUrl.protocol === "https:" ? https : http;
     const timeout = Math.min(backend.timeout ?? 5000, 10_000);
+    const startTime = Date.now();
 
     const req = transport.request(
       {
@@ -30,15 +31,27 @@ function probeBackend(backend) {
         path: targetUrl.pathname + targetUrl.search,
         method: "GET",
         timeout,
-        headers: { "User-Agent": "[REDACTED]-HealthCheck/1.0" },
+        headers: { "User-Agent": "GatewayHealthCheck/1.0" },
       },
       (res) => {
         res.resume();
+        const responseTime = Date.now() - startTime;
         const { statusCode } = res;
-        if (statusCode >= 200 && statusCode < 300) return resolve(100);
-        if (statusCode >= 300 && statusCode < 400) return resolve(80);
-        if (statusCode >= 400 && statusCode < 500) return resolve(60);
-        return resolve(0);
+
+        let statusScore;
+        if (statusCode >= 200 && statusCode < 300) statusScore = 100;
+        else if (statusCode >= 300 && statusCode < 400) statusScore = 80;
+        else if (statusCode >= 400 && statusCode < 500) statusScore = 60;
+        else statusScore = 0;
+
+        let latencyPenalty = 0;
+        if (responseTime > 2000) latencyPenalty = 40;
+        else if (responseTime > 1000) latencyPenalty = 25;
+        else if (responseTime > 500) latencyPenalty = 15;
+        else if (responseTime > 200) latencyPenalty = 5;
+
+        const finalScore = Math.max(0, statusScore - latencyPenalty);
+        return resolve(finalScore);
       },
     );
 

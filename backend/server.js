@@ -80,6 +80,30 @@ app.get("/api/status", async (_req, res) => {
     }
   }
 
+  const Backend = require("./src/models/Backend");
+  const Log = require("./src/models/Log");
+
+  let activeBackends = 0;
+  let totalBackends = 0;
+  try {
+    totalBackends = await Backend.countDocuments();
+    activeBackends = await Backend.countDocuments({ isActive: true });
+  } catch { /* ignore */ }
+
+  let requestCount = 0;
+  let avgLatency = 0;
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const stats = await Log.aggregate([
+      { $match: { timestamp: { $gte: oneHourAgo } } },
+      { $group: { _id: null, count: { $sum: 1 }, avgLat: { $avg: "$latency" } } },
+    ]);
+    if (stats.length > 0) {
+      requestCount = stats[0].count;
+      avgLatency = Math.round(stats[0].avgLat || 0);
+    }
+  } catch { /* ignore */ }
+
   res.json({
     status: "ok",
     uptimeSeconds: Math.floor(process.uptime()),
@@ -93,6 +117,12 @@ app.get("/api/status", async (_req, res) => {
         connected: redisHealthy,
       },
     },
+    backends: {
+      total: totalBackends,
+      active: activeBackends,
+    },
+    requestCount,
+    avgLatency,
   });
 });
 

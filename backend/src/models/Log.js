@@ -50,6 +50,9 @@ const logSchema = new mongoose.Schema(
     errorMessage: {
       type: String,
     },
+    errorStack: {
+      type: String,
+    },
     requestSize: {
       type: Number,
     },

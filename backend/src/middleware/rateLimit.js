@@ -64,6 +64,63 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+/**
+ * Record traffic metrics in Redis for baseline calculations.
+ * Stores per-endpoint latency and error data in 1-minute windows.
+ */
+async function recordTrafficMetrics(endpoint, latency, isError) {
+  const redis = getRedisClient();
+  if (!redis || !endpoint) return;
+
+  try {
+    const bucket = `adaptive:traffic:${endpoint}:${Math.floor(Date.now() / 60000)}`;
+    await redis.hincrby(bucket, "count", 1);
+    await redis.hincrby(bucket, "totalLatency", Math.round(latency || 0));
+    if (isError) await redis.hincrby(bucket, "errors", 1);
+    await redis.expire(bucket, 3600);
+  } catch {
+    // Non-critical, fail silently
+  }
+}
+
+/**
+ * Read recent traffic metrics from Redis for adaptive decisions.
+ * Returns { avgLatency, errorRate, requestCount } over last 10 minutes.
+ */
+async function getTrafficBaseline(endpoint) {
+  const redis = getRedisClient();
+  if (!redis || !endpoint) return { avgLatency: 0, errorRate: 0, requestCount: 0 };
+
+  try {
+    const now = Math.floor(Date.now() / 60000);
+    let totalCount = 0;
+    let totalLatency = 0;
+    let totalErrors = 0;
+
+    const pipeline = redis.pipeline();
+    for (let i = 1; i <= 10; i++) {
+      pipeline.hgetall(`adaptive:traffic:${endpoint}:${now - i}`);
+    }
+    const results = await pipeline.exec();
+
+    for (const [, val] of results) {
+      if (val && val.count) {
+        totalCount += Number(val.count) || 0;
+        totalLatency += Number(val.totalLatency) || 0;
+        totalErrors += Number(val.errors) || 0;
+      }
+    }
+
+    return {
+      avgLatency: totalCount > 0 ? totalLatency / totalCount : 0,
+      errorRate: totalCount > 0 ? totalErrors / totalCount : 0,
+      requestCount: totalCount,
+    };
+  } catch {
+    return { avgLatency: 0, errorRate: 0, requestCount: 0 };
+  }
+}
+
 function getAdaptiveMultiplier(req) {
   const score = Number(req.backendHealthScore ?? 100);
   const circuitState = req.backendCircuitState || "CLOSED";
@@ -77,15 +134,44 @@ function getAdaptiveMultiplier(req) {
   const circuitFactor =
     circuitState === "HALF_OPEN" ? 0.8 : circuitState === "OPEN" ? 0.5 : 1;
 
-  return clamp(healthFactor * circuitFactor, 0.4, 1);
+  const baseline = req._trafficBaseline;
+  let latencyFactor = 1;
+  let errorFactor = 1;
+
+  if (baseline) {
+    if (baseline.avgLatency > 0 && baseline.avgLatency > 500) {
+      latencyFactor = 0.5;
+    } else if (baseline.avgLatency > 200) {
+      latencyFactor = 0.75;
+    }
+
+    if (baseline.errorRate > 0.1) {
+      errorFactor = 0.5;
+    } else if (baseline.errorRate > 0.05) {
+      errorFactor = 0.75;
+    }
+
+    if (baseline.requestCount < 10) {
+      latencyFactor = 1;
+      errorFactor = 1;
+    }
+  }
+
+  return clamp(healthFactor * circuitFactor * latencyFactor * errorFactor, 0.3, 1.2);
 }
 
-function computeEffectiveLimit(baseLimit, cfg, req) {
+async function computeEffectiveLimit(baseLimit, cfg, req) {
   if (cfg.manualOverrideEnabled && cfg.manualOverrideRpm > 0) {
     return cfg.manualOverrideRpm;
   }
 
   if (!cfg.adaptiveEnabled) return baseLimit;
+
+  try {
+    req._trafficBaseline = await getTrafficBaseline(req.path);
+  } catch {
+    req._trafficBaseline = null;
+  }
 
   const adaptiveMultiplier = getAdaptiveMultiplier(req);
   return Math.max(1, Math.floor(baseLimit * adaptiveMultiplier));
@@ -110,7 +196,7 @@ async function checkRateLimit(clientId, limitRpm = null, req = {}) {
 
   const cfg = await getRateLimitConfig();
   const baseLimit = Number(limitRpm ?? cfg.defaultRpm);
-  const effectiveLimit = computeEffectiveLimit(baseLimit, cfg, req);
+  const effectiveLimit = await computeEffectiveLimit(baseLimit, cfg, req);
   const burstMultiplier = clamp(cfg.burstMultiplier, 1, 10);
 
   const refillPerSec = effectiveLimit / 60;
@@ -213,4 +299,5 @@ module.exports = {
   checkRateLimit,
   rateLimitMiddleware,
   invalidateRateLimitConfigCache,
+  recordTrafficMetrics,
 };
