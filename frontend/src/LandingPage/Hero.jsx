@@ -1,6 +1,70 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, Github } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { Button } from './ui/Button';
+
+function ParticleCanvas() {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animId;
+        let particles = [];
+
+        function resize() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        function createParticle() {
+            return {
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                r: Math.random() * 1.5 + 0.5,
+                dx: (Math.random() - 0.5) * 0.3,
+                dy: (Math.random() - 0.5) * 0.3,
+                o: Math.random() * 0.4 + 0.1,
+            };
+        }
+
+        for (let i = 0; i < 60; i++) particles.push(createParticle());
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const p of particles) {
+                p.x += p.dx;
+                p.y += p.dy;
+                if (p.x < 0) p.x = canvas.width;
+                if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height;
+                if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(245, 158, 11, ${p.o})`;
+                ctx.fill();
+            }
+            animId = requestAnimationFrame(draw);
+        }
+        draw();
+
+        return () => {
+            cancelAnimationFrame(animId);
+            window.removeEventListener('resize', resize);
+        };
+    }, []);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            aria-hidden="true"
+        />
+    );
+}
 
 export function Hero() {
     return (
@@ -11,6 +75,9 @@ export function Hero() {
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
+
+            {/* Subtle Particle Effects */}
+            <ParticleCanvas />
 
             <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-8 py-20 text-center">
                 {/* Badge */}

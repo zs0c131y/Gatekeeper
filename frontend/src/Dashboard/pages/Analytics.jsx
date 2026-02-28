@@ -517,6 +517,70 @@ export function Analytics() {
         </CardContent>
       </Card>
 
+      {/* Traffic Heatmap */}
+      <Card className="bg-[#111111] border-white/10">
+        <CardHeader>
+          <CardTitle className="text-lg">Traffic Heatmap</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <div className="grid gap-1" style={{ gridTemplateColumns: `60px repeat(${Math.min(hourlyTraffic.length, 24)}, 1fr)` }}>
+              <div className="text-xs text-gray-500" />
+              {hourlyTraffic.slice(0, 24).map((h, i) => (
+                <div key={i} className="text-center text-[10px] text-gray-500 truncate">
+                  {h.hour}
+                </div>
+              ))}
+              <div className="text-xs text-gray-500 flex items-center">Requests</div>
+              {hourlyTraffic.slice(0, 24).map((h, i) => {
+                const maxReq = Math.max(...hourlyTraffic.map((d) => d.requests || 0), 1);
+                const intensity = (h.requests || 0) / maxReq;
+                return (
+                  <div
+                    key={i}
+                    className="aspect-square rounded-sm cursor-pointer transition-transform hover:scale-110"
+                    style={{
+                      backgroundColor: intensity > 0
+                        ? `rgba(245, 158, 11, ${Math.max(0.1, intensity)})`
+                        : 'rgba(255,255,255,0.03)',
+                    }}
+                    title={`${h.hour}: ${h.requests || 0} requests`}
+                  />
+                );
+              })}
+              <div className="text-xs text-gray-500 flex items-center">Errors</div>
+              {hourlyTraffic.slice(0, 24).map((h, i) => {
+                const maxErr = Math.max(...hourlyTraffic.map((d) => d.errors || 0), 1);
+                const intensity = (h.errors || 0) / maxErr;
+                return (
+                  <div
+                    key={i}
+                    className="aspect-square rounded-sm cursor-pointer transition-transform hover:scale-110"
+                    style={{
+                      backgroundColor: intensity > 0
+                        ? `rgba(239, 68, 68, ${Math.max(0.1, intensity)})`
+                        : 'rgba(255,255,255,0.03)',
+                    }}
+                    title={`${h.hour}: ${h.errors || 0} errors`}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <span className="text-[10px] text-gray-500">Less</span>
+              {[0.1, 0.3, 0.5, 0.7, 1].map((v) => (
+                <div
+                  key={v}
+                  className="w-3 h-3 rounded-sm"
+                  style={{ backgroundColor: `rgba(245, 158, 11, ${v})` }}
+                />
+              ))}
+              <span className="text-[10px] text-gray-500">More</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 bg-[#111111] border-white/10">
           <CardHeader>
