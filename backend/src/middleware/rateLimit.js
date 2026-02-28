@@ -121,7 +121,7 @@ async function getTrafficBaseline(endpoint) {
   }
 }
 
-function getAdaptiveMultiplier(req) {
+function getAdaptiveMultiplier(req, baseRpm = 100) {
   const score = Number(req.backendHealthScore ?? 100);
   const circuitState = req.backendCircuitState || "CLOSED";
 
@@ -137,27 +137,34 @@ function getAdaptiveMultiplier(req) {
   const baseline = req._trafficBaseline;
   let latencyFactor = 1;
   let errorFactor = 1;
+  let trafficFactor = 1;
 
-  if (baseline) {
-    if (baseline.avgLatency > 0 && baseline.avgLatency > 500) {
+  if (baseline && baseline.requestCount >= 10) {
+    // Reduce limits when latency is high (>50% above normal ~100ms threshold)
+    if (baseline.avgLatency > 500) {
       latencyFactor = 0.5;
     } else if (baseline.avgLatency > 200) {
       latencyFactor = 0.75;
     }
 
+    // Reduce limits when error rate exceeds thresholds
     if (baseline.errorRate > 0.1) {
       errorFactor = 0.5;
     } else if (baseline.errorRate > 0.05) {
       errorFactor = 0.75;
     }
 
-    if (baseline.requestCount < 10) {
-      latencyFactor = 1;
-      errorFactor = 1;
+    // Increase limits when traffic is well below capacity and healthy
+    // If low traffic + low latency + low errors => allow more throughput
+    const rpm = baseline.requestCount * 6; // extrapolate 10min window to rpm
+    if (rpm < baseRpm * 0.3 && baseline.avgLatency < 50 && baseline.errorRate < 0.01) {
+      trafficFactor = 1.3;
+    } else if (rpm < baseRpm * 0.5 && baseline.avgLatency < 100 && baseline.errorRate < 0.03) {
+      trafficFactor = 1.15;
     }
   }
 
-  return clamp(healthFactor * circuitFactor * latencyFactor * errorFactor, 0.3, 1.2);
+  return clamp(healthFactor * circuitFactor * latencyFactor * errorFactor * trafficFactor, 0.3, 1.5);
 }
 
 async function computeEffectiveLimit(baseLimit, cfg, req) {
@@ -173,7 +180,7 @@ async function computeEffectiveLimit(baseLimit, cfg, req) {
     req._trafficBaseline = null;
   }
 
-  const adaptiveMultiplier = getAdaptiveMultiplier(req);
+  const adaptiveMultiplier = getAdaptiveMultiplier(req, baseLimit);
   return Math.max(1, Math.floor(baseLimit * adaptiveMultiplier));
 }
 

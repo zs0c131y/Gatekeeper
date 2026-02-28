@@ -68,7 +68,18 @@ async function checkBackend(backend) {
   const redis = getRedisClient();
 
   try {
-    const score = await probeBackend(backend);
+    let score = await probeBackend(backend);
+
+    // Factor circuit breaker state into health score
+    if (redis) {
+      const cbState = await redis.get(redisKeys.circuitState(backend.name));
+      if (cbState === "OPEN") {
+        score = Math.min(score, 10);
+      } else if (cbState === "HALF_OPEN") {
+        score = Math.min(score, Math.floor(score * 0.6));
+      }
+    }
+
     if (redis) {
       await redis.set(redisKeys.healthScore(backend.name), String(score));
       await redis.set(redisKeys.healthLastCheck(backend.name), new Date().toISOString());
