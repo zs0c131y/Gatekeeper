@@ -55,7 +55,7 @@ app.all("/api/auth/*", (req, res) => {
 // ── Phase 2: Body parsing + sanitation ────────────────────────────────────────
 applyBodyParsing(app);
 
-app.get("/", (_req, res) =>
+app.get("/api", (_req, res) =>
   res.json({ message: "Gatekeeper API is running", version: "1.0.0" }),
 );
 
@@ -100,7 +100,23 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/admin/api-keys", apiKeyRoutes);
 
+const path = require("path");
+
 app.use("/gateway", gatewayRoutes);
+
+// --- Static Frontend Serving for unified deployment ---
+const frontendDistPath = path.join(__dirname, "../frontend/dist");
+app.use(express.static(frontendDistPath));
+
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/gateway")) {
+    return next();
+  }
+  res.sendFile(path.join(frontendDistPath, "index.html"), (err) => {
+    // If index.html doesn't exist (e.g. not built), fall through to 404
+    if (err) next();
+  });
+});
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 
@@ -128,8 +144,8 @@ async function start() {
     startLogQueue();
     startAnalyticsAggregationLoop();
 
-    app.listen(PORT, () => {
-      console.log(`Gatekeeper API running on http://localhost:${PORT}`);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Gatekeeper API running on http://0.0.0.0:${PORT}`);
     });
   } catch (err) {
     console.error("Failed to start server:", err.message);
