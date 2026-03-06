@@ -222,10 +222,11 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
           forwardHeaders[k] = v;
         }
       }
-      // Keep the client's Accept-Encoding so upstream can send compressed
-      // responses (important for large assets). For non-HTML responses the
-      // gateway streams bytes through unchanged; for HTML the gateway
-      // decompresses, rewrites paths, and sends plain.
+      // Request uncompressed responses from upstream. Node's http/https
+      // modules don't auto-decompress, and attempting to decompress brotli
+      // in the HTML rewrite path is unreliable. Uncompressed transfer is
+      // simpler and avoids garbled output in the browser.
+      delete forwardHeaders["accept-encoding"];
 
       const globalCustomHeaders = await getGlobalCustomHeaders();
       const mergedInjected = buildInjectedHeaders(route, globalCustomHeaders);
@@ -319,35 +320,19 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
 
             // Skip content-length for HTML we'll rewrite (length will change)
             if (shouldRewrite && k.toLowerCase() === "content-length") continue;
-            // Skip content-encoding — we'll decompress and re-send plain
-            if (shouldRewrite && k.toLowerCase() === "content-encoding") continue;
 
             res.setHeader(k, v);
           }
 
           if (shouldRewrite) {
-            // Buffer entire HTML response, rewrite paths, send
-            const encoding = proxyRes.headers["content-encoding"];
-            let stream = proxyRes;
-
-            if (encoding === "gzip" || encoding === "br" || encoding === "deflate") {
-              if (encoding === "gzip") stream = proxyRes.pipe(zlib.createGunzip());
-              else if (encoding === "br") stream = proxyRes.pipe(zlib.createBrotliDecompress());
-              else stream = proxyRes.pipe(zlib.createInflate());
-            }
-
+            // Buffer HTML response, rewrite absolute paths, send
             const chunks = [];
-            stream.on("data", (chunk) => chunks.push(chunk));
-            stream.on("end", () => {
+            proxyRes.on("data", (chunk) => chunks.push(chunk));
+            proxyRes.on("end", () => {
               let html = Buffer.concat(chunks).toString("utf8");
               html = rewriteHtmlPaths(html, gatewayPrefix);
               res.setHeader("content-length", Buffer.byteLength(html));
               res.end(html);
-              resolve({ statusCode: proxyRes.statusCode, durationMs });
-            });
-            stream.on("error", (err) => {
-              logger.error("[proxy] HTML rewrite stream error", { error: err.message });
-              res.end();
               resolve({ statusCode: proxyRes.statusCode, durationMs });
             });
           } else {
