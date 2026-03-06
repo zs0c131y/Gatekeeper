@@ -417,15 +417,21 @@ function createProxyMiddleware(backend, route) {
       if (statusCode >= 500) await recordFailure(backend.name);
       else await recordSuccess(backend.name);
     } catch (err) {
-      errorMessage = err.message;
+      errorMessage = err.message || String(err);
       errorStack = err.stack;
+      logger.error("[proxy] forwardRequest failed", {
+        backend: backend.name,
+        path: req.path,
+        error: errorMessage,
+        code: err.code,
+      });
       await recordFailure(backend.name);
 
       if (!res.headersSent) {
         res.status(502).json({
           error: "Bad gateway - upstream unreachable",
           code: "UPSTREAM_ERROR",
-          message: err.message,
+          message: errorMessage,
           traceId,
         });
       }
