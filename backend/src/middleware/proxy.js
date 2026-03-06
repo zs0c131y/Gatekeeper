@@ -222,6 +222,10 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
           forwardHeaders[k] = v;
         }
       }
+      // Keep the client's Accept-Encoding so upstream can send compressed
+      // responses (important for large assets). For non-HTML responses the
+      // gateway streams bytes through unchanged; for HTML the gateway
+      // decompresses, rewrites paths, and sends plain.
 
       const globalCustomHeaders = await getGlobalCustomHeaders();
       const mergedInjected = buildInjectedHeaders(route, globalCustomHeaders);
@@ -273,6 +277,27 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
           const contentType = proxyRes.headers["content-type"] || "";
           const isHtml = contentType.includes("text/html");
           const shouldRewrite = isHtml && gatewayPrefix;
+
+          // Remove gateway's own security headers (helmet) so the upstream
+          // site's headers take effect. Without this, helmet's restrictive
+          // CSP (script-src 'self') blocks proxied site scripts/assets.
+          const GATEWAY_SECURITY_HEADERS = [
+            "content-security-policy",
+            "cross-origin-opener-policy",
+            "cross-origin-resource-policy",
+            "origin-agent-cluster",
+            "referrer-policy",
+            "strict-transport-security",
+            "x-content-type-options",
+            "x-dns-prefetch-control",
+            "x-download-options",
+            "x-frame-options",
+            "x-permitted-cross-domain-policies",
+            "x-xss-protection",
+          ];
+          for (const h of GATEWAY_SECURITY_HEADERS) {
+            res.removeHeader(h);
+          }
 
           res.status(proxyRes.statusCode);
           for (const [k, v] of Object.entries(proxyRes.headers)) {
