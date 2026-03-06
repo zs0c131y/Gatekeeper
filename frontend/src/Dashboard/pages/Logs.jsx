@@ -6,7 +6,9 @@ import {
   Pause,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
+import { downloadCSV } from "../../utils/export";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "../../lib/utils";
 import {
@@ -231,6 +233,7 @@ export function Logs() {
   const [streamLogs, setStreamLogs] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [activeQuick, setActiveQuick] = useState("");
   const [filters, setFilters] = useState({
     trace_id: "",
     method: "",
@@ -428,13 +431,72 @@ export function Logs() {
                 key={filter.value}
                 variant="outline"
                 size="sm"
-                className="bg-white/5 hover:bg-white/10 border-white/10 text-sm text-gray-300"
+                className={cn(
+                  "text-sm",
+                  activeQuick === filter.value
+                    ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                    : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-300",
+                )}
+                onClick={() => {
+                  if (activeQuick === filter.value) {
+                    setActiveQuick("");
+                    handleClearFilters();
+                  } else {
+                    setActiveQuick(filter.value);
+                    const now = new Date();
+                    if (filter.value === "errors") {
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: "500",
+                        from: "",
+                        to: "",
+                      }));
+                    } else if (filter.value === "slow") {
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: "",
+                        from: "",
+                        to: "",
+                      }));
+                    } else if (filter.value === "hour") {
+                      const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: "",
+                        from: hourAgo.toISOString(),
+                        to: "",
+                      }));
+                    }
+                    setPage(1);
+                  }
+                }}
               >
                 {filter.label}
               </Button>
             ))}
           </div>
           <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                const rows = logs.map((l) => ({
+                  timestamp: l.timestamp,
+                  method: l.method,
+                  endpoint: l.endpoint,
+                  status: l.status_code || l.status,
+                  latency_ms: l.latency_ms || l.latency,
+                  client_ip: l.client_ip || l.clientIp,
+                  trace_id: l.trace_id || l.traceId,
+                }));
+                downloadCSV(rows, "logs_export.csv");
+              }}
+              variant="outline"
+              size="sm"
+              className="bg-white/5 hover:bg-white/10 border-white/10 text-white"
+              disabled={logs.length === 0}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              Export CSV
+            </Button>
             <Button
               onClick={handleClearFilters}
               variant="outline"

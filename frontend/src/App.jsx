@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { GatewayFilterProvider } from "./context/GatewayFilterContext";
+import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DashboardLayout } from "./Dashboard/DashboardLayout";
 import { Overview } from "./Dashboard/pages/Overview";
@@ -19,6 +20,7 @@ function App() {
   return (
     <AuthProvider>
       <GatewayFilterProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           {/* Landing Page */}
@@ -50,6 +52,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
       </GatewayFilterProvider>
     </AuthProvider>
   );

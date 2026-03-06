@@ -1,4 +1,5 @@
 const Log = require("../models/Log");
+const logger = require("../utils/logger");
 
 const MAX_QUEUE_SIZE = 5000;
 const FLUSH_INTERVAL_MS = 750;
@@ -32,7 +33,7 @@ async function flushLogs() {
     if (currentBatch.length > 0) {
       queue = [...currentBatch, ...queue].slice(0, MAX_QUEUE_SIZE);
     }
-    console.error("[LogQueue] flush failed:", err.message);
+    logger.error("[LogQueue] flush failed", { error: err.message });
   } finally {
     currentBatch = [];
     flushing = false;

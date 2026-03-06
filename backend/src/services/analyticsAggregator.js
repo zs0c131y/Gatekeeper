@@ -1,5 +1,6 @@
 const Analytics = require("../models/Analytics");
 const Log = require("../models/Log");
+const logger = require("../utils/logger");
 
 let timer = null;
 
@@ -97,12 +98,12 @@ function startAnalyticsAggregationLoop() {
   if (timer) return;
 
   runAnalyticsAggregation().catch((err) => {
-    console.error("[AnalyticsAggregator] initial run failed:", err.message);
+    logger.error("[AnalyticsAggregator] initial run failed", { error: err.message });
   });
 
   timer = setInterval(() => {
     runAnalyticsAggregation().catch((err) => {
-      console.error("[AnalyticsAggregator] run failed:", err.message);
+      logger.error("[AnalyticsAggregator] run failed", { error: err.message });
     });
   }, 60_000);
 

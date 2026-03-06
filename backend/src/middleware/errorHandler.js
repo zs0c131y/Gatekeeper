@@ -1,3 +1,5 @@
+const logger = require("../utils/logger");
+
 /**
  * Global Express error handler.
  * Returns consistent error shape: { error, code }
@@ -46,7 +48,7 @@ function errorHandler(err, req, res, _next) {
   // Log 5xx errors
   if (status >= 500) {
     const traceId = req.traceId || 'unknown';
-    console.error(`[${traceId}] ${status} ${err.message}`, err.stack);
+    logger.error(`[${traceId}] ${status} ${err.message}`, { stack: err.stack });
   }
 
   const response = { error: message, code };

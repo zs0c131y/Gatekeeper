@@ -53,7 +53,18 @@ export function HowItWorks() {
                 viewport={{ once: true, margin: "-100px" }}
                 className="relative"
             >
-                <div className="grid md:grid-cols-3 gap-12 md:gap-16">
+                <div className="grid md:grid-cols-3 gap-12 md:gap-16 relative">
+                    {/* Connecting lines between steps (desktop only) */}
+                    <div className="hidden md:block absolute top-8 left-[calc(16.67%+2rem)] right-[calc(16.67%+2rem)] h-px">
+                        <div className="w-full h-full bg-gradient-to-r from-amber-500/30 via-amber-500/60 to-amber-500/30 relative">
+                            <motion.div
+                                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-400"
+                                animate={{ left: ['0%', '100%', '0%'] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                            />
+                        </div>
+                    </div>
+
                     {steps.map((step, index) => {
                         const Icon = step.icon;
                         return (
@@ -69,6 +80,11 @@ export function HowItWorks() {
                                         {step.number}
                                     </span>
                                 </div>
+
+                                {/* Vertical connecting line for mobile */}
+                                {index < steps.length - 1 && (
+                                    <div className="md:hidden w-px h-8 bg-gradient-to-b from-amber-500/40 to-transparent mx-auto mt-4 mb-0" />
+                                )}
 
                                 {/* Content */}
                                 <h3 className="text-xl font-semibold text-text-primary mb-3">

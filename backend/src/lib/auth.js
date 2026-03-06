@@ -100,6 +100,16 @@ function initAuth(db, redisClient) {
   _auth = betterAuth({
     database: mongodbAdapter(db),
 
+    session: {
+      // Sessions last 7 days; rolling window resets on each visit.
+      expiresIn: 60 * 60 * 24 * 7, // 7 days (seconds)
+      updateAge: 60 * 60 * 24, // refresh cookie after 1 day of activity
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 5, // client-side cache for 5 min (reduces DB reads)
+      },
+    },
+
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
@@ -117,14 +127,10 @@ function initAuth(db, redisClient) {
       deleteUser: {
         enabled: true,
       },
-      additionalFields: {
-        role: {
-          type: "string",
-          required: false,
-          defaultValue: "user",
-          input: false,
-        },
-      },
+      // NOTE: `role` is intentionally NOT listed here as an additionalField.
+      // The `admin` plugin (below) owns the `role` field.  Defining it in both
+      // places causes a duplicate-field conflict in better-auth v1.x which can
+      // silently break signUpEmail / signInEmail.
     },
 
     plugins: [

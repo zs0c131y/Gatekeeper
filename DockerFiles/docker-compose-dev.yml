@@ -1,4 +1,18 @@
 services:
+  mongodb:
+    image: mongo:8.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   frontend:
     build:
       context: ..
@@ -23,9 +37,11 @@ services:
     env_file:
       - ./Env/backend.env
     depends_on:
+      - mongodb
+      - redis
       - temp
       - temp-2
-  
+
   temp:
     build:
       context: ../temp_servers
@@ -33,11 +49,6 @@ services:
     image: temp-1:dev
     ports:
       - "4000:3000"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   temp-2:
     build:
@@ -46,13 +57,9 @@ services:
     image: temp-2:dev
     ports:
       - "4001:3000"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    
 
 volumes:
+  mongo_data:
+  redis_data:
   backend_node_modules:
   frontend_node_modules:

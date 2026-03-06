@@ -20,7 +20,12 @@ function escapeRegex(value) {
 }
 
 async function getCircuitStateRaw(redis, name) {
-  if (!redis) return "CLOSED";
+  if (!redis) {
+    // Redis unavailable – fall back to in-memory health score so unreachable
+    // backends don't incorrectly appear as "Normal" (CLOSED).
+    const memScore = getMemoryScore(name);
+    return memScore === null || memScore >= 20 ? "CLOSED" : "OPEN";
+  }
   return (await redis.get(redisKeys.circuitState(name))) || "CLOSED";
 }
 async function getHealthScoreRaw(redis, name) {
