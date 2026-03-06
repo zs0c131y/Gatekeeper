@@ -18,7 +18,7 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/err", (req, res) => {
-    return 100 / 0
+    res.status(500).json({ error: "Simulated server error" });
 });
 
 app.get("/crash", (req, res) => {

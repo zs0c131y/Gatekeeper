@@ -156,6 +156,36 @@ function buildTopErrorEndpoints(logs) {
     .slice(0, 10);
 }
 
+// GET /api/analytics — redirect to summary for convenience
+router.get("/", async (req, res, next) => {
+  try {
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const routesOnly = req.query.routesOnly === "true";
+    const logs = await getLogsSince(hours, 40_000, routesOnly);
+
+    const totalRequests = logs.length;
+    const errorCount = logs.filter((l) => l.status >= 400).length;
+    const avgLatency = totalRequests
+      ? Math.round(logs.reduce((s, l) => s + toNumber(l.latency), 0) / totalRequests)
+      : 0;
+
+    res.json({
+      totalRequests,
+      avgLatency,
+      errorRate: totalRequests
+        ? Number(((errorCount / totalRequests) * 100).toFixed(1))
+        : 0,
+      traffic: bucketByHour(logs).map((b) => ({
+        time: b.time,
+        successful: b.successful,
+        errors: b.errors,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/traffic", async (req, res, next) => {
   try {
     const hours = Math.min(toNumber(req.query.hours, 24), 168);

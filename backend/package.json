@@ -4,7 +4,7 @@
   "description": "server",
   "repository": {
     "type": "git",
-    "url": "httpss://github.com/zs0c131y/gatekeeper.git"
+    "url": "https://github.com/zs0c131y/gatekeeper.git"
   },
   "license": "AGPL-3.0",
   "author": "adarsh, arden, sounak",

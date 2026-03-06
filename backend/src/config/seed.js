@@ -141,7 +141,15 @@ async function seed() {
 
     console.log("Seeded default admin user");
   } else {
-    console.log("Admin user already exists, skipping");
+    // Ensure the existing admin user has the admin role
+    if (existing.role !== "admin") {
+      await db
+        .collection("user")
+        .updateOne({ email: DEFAULT_ADMIN.email }, { $set: { role: "admin" } });
+      console.log("Promoted existing admin user to admin role");
+    } else {
+      console.log("Admin user already exists, skipping");
+    }
   }
 
   // Seed config documents

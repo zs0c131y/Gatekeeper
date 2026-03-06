@@ -94,10 +94,17 @@ async function connectRedis() {
   }
 
   return new Promise((resolve, reject) => {
+    let initialConnect = true;
+
     redisClient = new Redis(url, {
       connectTimeout: 5000,
-      maxRetriesPerRequest: 0,
-      retryStrategy: () => null, // Disable retries
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        // Exponential backoff: 200ms, 400ms, 800ms, ... capped at 10s
+        const delay = Math.min(times * 200, 10_000);
+        console.log(`[Redis] Reconnecting in ${delay}ms (attempt ${times})`);
+        return delay;
+      },
       lazyConnect: true,
     });
 
@@ -105,18 +112,28 @@ async function connectRedis() {
       console.log("Connected to Redis");
     });
 
-    redisClient.on("error", () => {
-      // Suppress repeated errors - handled via connect() rejection
+    redisClient.on("reconnecting", () => {
+      console.log("[Redis] Reconnecting...");
+    });
+
+    redisClient.on("error", (err) => {
+      // Only log once per unique message to avoid spam
+      if (err.message !== redisClient._lastErrorMsg) {
+        console.error("[Redis] Error:", err.message);
+        redisClient._lastErrorMsg = err.message;
+      }
     });
 
     redisClient
       .connect()
       .then(() => {
+        initialConnect = false;
         resolve(redisClient);
       })
       .catch((err) => {
-        console.error("Redis connection failed:", err.message);
+        console.error("Redis initial connection failed:", err.message);
         redisClient = null;
+        initialConnect = false;
         reject(err);
       });
   });

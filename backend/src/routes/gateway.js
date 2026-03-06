@@ -188,13 +188,14 @@ router.use(async (req, res, next) => {
   if (route.requiresAuth) {
     const hasBearer = req.headers.authorization?.startsWith("Bearer ");
     const hasApiKey = !!req.headers[process.env.API_KEY_HEADER || "x-api-key"];
+    const hasCookie = !!req.headers.cookie?.includes("better-auth.session_token");
 
     if (hasApiKey) {
       await new Promise((resolve, reject) =>
         requireApiKey(req, res, (err) => (err ? reject(err) : resolve())),
       );
       if (res.headersSent) return;
-    } else if (hasBearer) {
+    } else if (hasBearer || hasCookie) {
       await new Promise((resolve, reject) =>
         requireJWT(req, res, (err) => (err ? reject(err) : resolve())),
       );

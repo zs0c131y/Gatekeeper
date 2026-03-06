@@ -71,7 +71,7 @@ app.get("/api/status", async (_req, res) => {
   const redis = getRedisClient();
   let redisHealthy = false;
 
-  if (redis) {
+  if (redis && redis.status === "ready") {
     try {
       await redis.ping();
       redisHealthy = true;

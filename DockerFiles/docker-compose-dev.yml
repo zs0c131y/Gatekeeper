@@ -34,11 +34,11 @@ services:
     ports:
       - "4000:3000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/gateway/temp1"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-  
+
   temp-2:
     build:
       context: ../temp_servers
@@ -47,9 +47,9 @@ services:
     ports:
       - "4001:3000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/gateway/temp2"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 10s
-      timeout: 5s 
+      timeout: 5s
       retries: 5
     
 
