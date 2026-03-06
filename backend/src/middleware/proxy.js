@@ -254,6 +254,7 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
           method: req.method,
           headers: forwardHeaders,
           timeout,
+          ...(isHttps ? { servername: target.hostname } : {}),
         },
         (proxyRes) => {
           const durationMs = Date.now() - start;

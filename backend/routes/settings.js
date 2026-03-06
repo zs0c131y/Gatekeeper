@@ -515,7 +515,15 @@ router.post(
         return res.status(400).json({ error: "name and url are required" });
       }
 
-      const servicePrefix = prefix || `/gateway/${name}`;
+      // The user-facing prefix is the full external path (e.g. /gateway/dev),
+      // but the gateway router is mounted at /gateway so Express already strips
+      // that segment.  The route stored in the DB must be relative to the mount
+      // point (e.g. /dev/*) for pattern matching to work.
+      const GATEWAY_MOUNT = "/gateway";
+      const externalPrefix = prefix || `${GATEWAY_MOUNT}/${name}`;
+      const internalPrefix = externalPrefix.startsWith(GATEWAY_MOUNT)
+        ? externalPrefix.slice(GATEWAY_MOUNT.length)
+        : externalPrefix;
 
       const backend = await Backend.create({
         name,
@@ -528,10 +536,10 @@ router.post(
       });
 
       const route = await Route.create({
-        path: `${servicePrefix}/*`,
+        path: `${internalPrefix}/*`,
         method: "*",
         backendId: backend._id,
-        stripPrefix: servicePrefix,
+        stripPrefix: internalPrefix,
         isActive: true,
         priority: 10,
       });
@@ -554,6 +562,7 @@ router.get("/services", requireJWT, async (_req, res, next) => {
       .populate("backendId", "name baseUrl")
       .lean();
 
+    const GATEWAY_MOUNT = "/gateway";
     const services = backends.map((b) => {
       const linkedRoutes = routes.filter(
         (r) => String(r.backendId?._id || r.backendId) === String(b._id),
@@ -561,12 +570,20 @@ router.get("/services", requireJWT, async (_req, res, next) => {
       const gatewayRoute = linkedRoutes.find(
         (r) => r.path?.endsWith("/*") && r.stripPrefix,
       );
+      // Show the full external path to the user (re-add gateway mount)
+      const internalPrefix = gatewayRoute?.stripPrefix || null;
+      const externalPrefix = internalPrefix
+        ? `${GATEWAY_MOUNT}${internalPrefix}`
+        : null;
+      const externalPath = gatewayRoute?.path
+        ? `${GATEWAY_MOUNT}${gatewayRoute.path}`
+        : null;
       return {
         _id: b._id,
         name: b.name,
         url: b.baseUrl,
-        prefix: gatewayRoute?.stripPrefix || null,
-        gatewayPath: gatewayRoute?.path || null,
+        prefix: externalPrefix,
+        gatewayPath: externalPath,
         isActive: b.isActive,
         routeActive: gatewayRoute?.isActive ?? null,
         routeId: gatewayRoute?._id || null,
