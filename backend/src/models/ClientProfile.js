@@ -25,12 +25,33 @@ const clientProfileSchema = new mongoose.Schema(
     avgLatency: {
       type: Number,
     },
+    firstSeen: {
+      type: Date,
+    },
     lastSeen: {
       type: Date,
+    },
+    avgRequestInterval: {
+      type: Number,
+      default: 0,
+    },
+    rateLimitViolations: {
+      type: Number,
+      default: 0,
+    },
+    behaviorScore: {
+      type: Number,
+      default: 100,
+      min: 0,
+      max: 100,
     },
     isBlocked: {
       type: Boolean,
       required: true,
+      default: false,
+    },
+    isWhitelisted: {
+      type: Boolean,
       default: false,
     },
     customRateLimit: {

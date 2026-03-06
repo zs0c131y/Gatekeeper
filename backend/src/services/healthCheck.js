@@ -10,6 +10,7 @@ const Backend = require("../models/Backend");
 const Config = require("../models/Config");
 const redisKeys = require("../config/redisKeys");
 const { getRedisClient } = require("../config/database");
+const logger = require("../utils/logger");
 
 let _timer = null;
 
@@ -21,6 +22,7 @@ function probeBackend(backend) {
     const targetUrl = new URL(backend.healthCheckPath || "/health", backend.baseUrl);
     const transport = targetUrl.protocol === "https:" ? https : http;
     const timeout = Math.min(backend.timeout ?? 5000, 10_000);
+    const startTime = Date.now();
 
     const req = transport.request(
       {
@@ -29,15 +31,27 @@ function probeBackend(backend) {
         path: targetUrl.pathname + targetUrl.search,
         method: "GET",
         timeout,
-        headers: { "User-Agent": "Gatekeeper-HealthCheck/1.0" },
+        headers: { "User-Agent": "GatewayHealthCheck/1.0" },
       },
       (res) => {
         res.resume();
+        const responseTime = Date.now() - startTime;
         const { statusCode } = res;
-        if (statusCode >= 200 && statusCode < 300) return resolve(100);
-        if (statusCode >= 300 && statusCode < 400) return resolve(80);
-        if (statusCode >= 400 && statusCode < 500) return resolve(60);
-        return resolve(0);
+
+        let statusScore;
+        if (statusCode >= 200 && statusCode < 300) statusScore = 100;
+        else if (statusCode >= 300 && statusCode < 400) statusScore = 80;
+        else if (statusCode >= 400 && statusCode < 500) statusScore = 60;
+        else statusScore = 0;
+
+        let latencyPenalty = 0;
+        if (responseTime > 2000) latencyPenalty = 40;
+        else if (responseTime > 1000) latencyPenalty = 25;
+        else if (responseTime > 500) latencyPenalty = 15;
+        else if (responseTime > 200) latencyPenalty = 5;
+
+        const finalScore = Math.max(0, statusScore - latencyPenalty);
+        return resolve(finalScore);
       },
     );
 
@@ -54,16 +68,27 @@ async function checkBackend(backend) {
   const redis = getRedisClient();
 
   try {
-    const score = await probeBackend(backend);
+    let score = await probeBackend(backend);
+
+    // Factor circuit breaker state into health score
+    if (redis) {
+      const cbState = await redis.get(redisKeys.circuitState(backend.name));
+      if (cbState === "OPEN") {
+        score = Math.min(score, 10);
+      } else if (cbState === "HALF_OPEN") {
+        score = Math.min(score, Math.floor(score * 0.6));
+      }
+    }
+
     if (redis) {
       await redis.set(redisKeys.healthScore(backend.name), String(score));
       await redis.set(redisKeys.healthLastCheck(backend.name), new Date().toISOString());
     } else {
       _memScores.set(backend.name, score);
     }
-    console.log(`[HealthCheck] ${backend.name}: score=${score}`);
+    logger.debug(`[HealthCheck] ${backend.name}: score=${score}`);
   } catch (err) {
-    console.error(`[HealthCheck] ${backend.name} error:`, err.message);
+    logger.error(`[HealthCheck] ${backend.name} error`, { error: err.message });
   }
 }
 
@@ -78,7 +103,7 @@ async function runHealthChecks() {
     const backends = await Backend.find({ isActive: true }).lean();
     await Promise.allSettled(backends.map(checkBackend));
   } catch (err) {
-    console.error("[HealthCheck] Failed to fetch backends:", err.message);
+    logger.error("[HealthCheck] Failed to fetch backends", { error: err.message });
   }
 }
 
@@ -106,7 +131,7 @@ async function startHealthCheckLoop() {
     if (typeof _timer.unref === "function") _timer.unref();
   }
 
-  console.log("[HealthCheck] Starting health check loop");
+  logger.info("[HealthCheck] Starting health check loop");
   await runHealthChecks();
   await schedule();
 }
@@ -115,7 +140,7 @@ function stopHealthCheckLoop() {
   if (_timer) {
     clearTimeout(_timer);
     _timer = null;
-    console.log("[HealthCheck] Loop stopped");
+    logger.info("[HealthCheck] Loop stopped");
   }
 }
 

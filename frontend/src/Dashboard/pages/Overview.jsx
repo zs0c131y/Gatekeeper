@@ -705,7 +705,13 @@ export function Overview() {
                                   : "warning"
                             }
                           >
-                            {backend.circuitState || "CLOSED"}
+                            {backend.circuitState === "CLOSED"
+                              ? "Normal"
+                              : backend.circuitState === "OPEN"
+                                ? "Tripped"
+                                : backend.circuitState === "HALF_OPEN"
+                                  ? "Testing"
+                                  : "Normal"}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-3">

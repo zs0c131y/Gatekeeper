@@ -50,6 +50,9 @@ const logSchema = new mongoose.Schema(
     errorMessage: {
       type: String,
     },
+    errorStack: {
+      type: String,
+    },
     requestSize: {
       type: Number,
     },
@@ -69,8 +72,9 @@ const logSchema = new mongoose.Schema(
   { timestamps: false },
 );
 
-logSchema.index({ timestamp: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
-logSchema.index({ clientIp: 1 });
+logSchema.index({ timestamp: -1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
+logSchema.index({ endpoint: 1, timestamp: -1 });
+logSchema.index({ clientIp: 1, timestamp: -1 });
 logSchema.index({ status: 1 });
 logSchema.index({ source: 1 });
 
