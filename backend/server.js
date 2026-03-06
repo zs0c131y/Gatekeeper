@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const morgan = require("morgan");
 require("dotenv").config();
 
 const {
@@ -33,6 +34,9 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ── HTTP Request Logging ──────────────────────────────────────────────────────
+app.use(morgan("dev"));
 
 // ── Phase 1: Security headers + CORS (must precede the auth handler) ─────────
 applyPreBodySecurity(app);
