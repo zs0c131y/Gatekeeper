@@ -4,6 +4,7 @@
 const { Router } = require("express");
 const Log = require("../src/models/Log");
 const Backend = require("../src/models/Backend");
+const Route = require("../src/models/Route");
 const Alert = require("../src/models/Alert");
 const { getRedisClient } = require("../src/config/database");
 const redisKeys = require("../src/config/redisKeys");
@@ -127,11 +128,20 @@ router.get("/", async (req, res, next) => {
       ? `${sign(cur.errorRate - prev.errorRate)}${(cur.errorRate - prev.errorRate).toFixed(1)}%`
       : null;
 
-    const dbBackends = await Backend.find({ isActive: true }).lean();
+    const [dbBackends, allRoutes] = await Promise.all([
+      Backend.find({ isActive: true }).lean(),
+      Route.find({ isActive: true }).lean(),
+    ]);
     const backends = await Promise.all(
       dbBackends.map(async (b) => {
         const score = await getHealthScoreRaw(redis, b.name);
         const circuitState = await getCircuitStateRaw(redis, b.name);
+        const gatewayRoute = allRoutes.find(
+          (r) =>
+            String(r.backendId) === String(b._id) &&
+            r.path?.endsWith("/*") &&
+            r.stripPrefix,
+        );
         return {
           name: b.name,
           status: scoreToStatus(score, {
@@ -140,6 +150,7 @@ router.get("/", async (req, res, next) => {
           }),
           circuitState,
           healthScore: score ?? 0,
+          gatewayPath: gatewayRoute?.path || null,
         };
       }),
     );

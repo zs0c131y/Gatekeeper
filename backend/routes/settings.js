@@ -502,6 +502,107 @@ router.get("/api-keys", requireJWT, async (_req, res, next) => {
   }
 });
 
+// ── Unified Service API ─────────────────────────────────────────────────────
+
+router.post(
+  "/services",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const { name, url, prefix } = req.body;
+      if (!name || !url) {
+        return res.status(400).json({ error: "name and url are required" });
+      }
+
+      const servicePrefix = prefix || `/gateway/${name}`;
+
+      const backend = await Backend.create({
+        name,
+        baseUrl: url,
+        healthCheckPath: req.body.healthPath || "/health",
+        weight: req.body.weight || 1,
+        timeout: req.body.timeout || 5000,
+        healthyAbove: req.body.healthyAbove ?? 80,
+        degradedAbove: req.body.degradedAbove ?? 50,
+      });
+
+      const route = await Route.create({
+        path: `${servicePrefix}/*`,
+        method: "*",
+        backendId: backend._id,
+        stripPrefix: servicePrefix,
+        isActive: true,
+        priority: 10,
+      });
+
+      const populated = await Route.findById(route._id)
+        .populate("backendId", "name baseUrl")
+        .lean();
+
+      res.status(201).json({ backend, route: populated });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.get("/services", requireJWT, async (_req, res, next) => {
+  try {
+    const backends = await Backend.find().lean();
+    const routes = await Route.find()
+      .populate("backendId", "name baseUrl")
+      .lean();
+
+    const services = backends.map((b) => {
+      const linkedRoutes = routes.filter(
+        (r) => String(r.backendId?._id || r.backendId) === String(b._id),
+      );
+      const gatewayRoute = linkedRoutes.find(
+        (r) => r.path?.endsWith("/*") && r.stripPrefix,
+      );
+      return {
+        _id: b._id,
+        name: b.name,
+        url: b.baseUrl,
+        prefix: gatewayRoute?.stripPrefix || null,
+        gatewayPath: gatewayRoute?.path || null,
+        isActive: b.isActive,
+        routeActive: gatewayRoute?.isActive ?? null,
+        routeId: gatewayRoute?._id || null,
+        routes: linkedRoutes.length,
+      };
+    });
+
+    res.json({ services });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete(
+  "/services/:nameOrId",
+  requireJWT,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const { nameOrId } = req.params;
+      const id = asObjectIdMaybe(nameOrId);
+      const query = id ? { _id: id } : { name: nameOrId };
+
+      const backend = await Backend.findOne(query);
+      if (!backend) return res.status(404).json({ error: "Service not found" });
+
+      await Route.deleteMany({ backendId: backend._id });
+      await Backend.findByIdAndDelete(backend._id);
+
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ── Routes CRUD ─────────────────────────────────────────────────────────────
 
 router.get("/routes", requireJWT, async (_req, res, next) => {

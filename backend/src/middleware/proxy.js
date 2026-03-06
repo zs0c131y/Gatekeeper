@@ -225,6 +225,10 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
         req.ip || req.socket?.remoteAddress || "";
       forwardHeaders["x-forwarded-proto"] = req.protocol || "http";
       forwardHeaders["x-forwarded-host"] = req.hostname || "";
+
+      if (route.stripPrefix) {
+        forwardHeaders["x-forwarded-prefix"] = route.stripPrefix;
+      }
       forwardHeaders["x-gateway-id"] = process.env.GATEWAY_ID || "gateway-1";
       forwardHeaders["x-request-id"] =
         req.traceId || crypto.randomBytes(8).toString("hex");
@@ -257,6 +261,20 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
           res.status(proxyRes.statusCode);
           for (const [k, v] of Object.entries(proxyRes.headers)) {
             if (!HOP_BY_HOP.has(k.toLowerCase())) {
+              // Rewrite Location headers on redirects to include the prefix
+              if (
+                k.toLowerCase() === "location" &&
+                route.stripPrefix &&
+                proxyRes.statusCode >= 300 &&
+                proxyRes.statusCode < 400
+              ) {
+                const loc = String(v);
+                // Only rewrite relative paths that don't already have the prefix
+                if (loc.startsWith("/") && !loc.startsWith(route.stripPrefix)) {
+                  res.setHeader(k, route.stripPrefix + loc);
+                  continue;
+                }
+              }
               res.setHeader(k, v);
             }
           }

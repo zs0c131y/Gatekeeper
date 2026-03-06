@@ -714,7 +714,7 @@ export function Overview() {
                                   : "Normal"}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <span className="text-xs text-gray-400">
                             Health: {backend.healthScore}%
                           </span>
@@ -729,6 +729,11 @@ export function Overview() {
                           >
                             {backend.status}
                           </Badge>
+                          {backend.gatewayPath && (
+                            <span className="text-[10px] font-mono text-amber-400/70 bg-amber-500/5 border border-amber-500/15 rounded px-1.5 py-0">
+                              {backend.gatewayPath}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

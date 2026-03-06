@@ -53,6 +53,12 @@ import { EmptyState } from "../../components/common/EmptyState";
 
 const tabs = [
   {
+    id: "services",
+    label: "Services",
+    icon: Globe,
+    description: "Unified microservice management with gateway pathing",
+  },
+  {
     id: "general",
     label: "General",
     icon: Settings2,
@@ -123,7 +129,7 @@ function SaveToast({ status }) {
 }
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState("services");
   const [saveStatus, setSaveStatus] = useState(null);
 
   const {
@@ -146,6 +152,13 @@ export function Settings() {
     error: routesError,
     refetch: refetchRoutes,
   } = useApi(() => api.getRoutes());
+
+  const {
+    data: servicesData,
+    loading: servicesLoading,
+    error: servicesError,
+    refetch: refetchServices,
+  } = useApi(() => api.getServices());
 
   const withSaveStatus = async (action) => {
     try {
@@ -244,6 +257,24 @@ export function Settings() {
             <ErrorMessage error={settingsError} onRetry={refetchSettings} />
           ) : (
             <>
+              {activeTab === "services" &&
+                (servicesLoading ? (
+                  <LoadingSkeleton variant="card" count={3} />
+                ) : servicesError ? (
+                  <ErrorMessage
+                    error={servicesError}
+                    onRetry={refetchServices}
+                  />
+                ) : (
+                  <ServicesTab
+                    services={servicesData?.services || []}
+                    refetch={() => {
+                      refetchServices();
+                      refetchBackends();
+                      refetchRoutes();
+                    }}
+                  />
+                ))}
               {activeTab === "general" && (
                 <GeneralTab
                   settings={settingsData}
@@ -403,6 +434,220 @@ function SaveBtn({ onClick, label = "Save Changes" }) {
         <Save className="w-3.5 h-3.5" />
         {label}
       </Button>
+    </div>
+  );
+}
+
+// ─── Services ─────────────────────────────────────────────────────────────────
+
+function AddServiceModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({
+    name: "",
+    url: "",
+    prefix: "",
+  });
+
+  const derivedPrefix = form.prefix || (form.name ? `/gateway/${form.name}` : "/gateway/...");
+
+  return (
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="bg-[#0f0f0f] border-white/15 text-white max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-white">Add Service</DialogTitle>
+          <DialogDescription className="text-gray-500">
+            Register a microservice. A backend and gateway route will be created
+            automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit({
+              name: form.name,
+              url: form.url,
+              prefix: form.prefix || undefined,
+            });
+          }}
+          className="space-y-3 pt-1"
+        >
+          <FieldInput
+            label="Service Name"
+            placeholder="e.g. dev"
+            value={form.name}
+            onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+          />
+          <FieldInput
+            label="Service URL"
+            placeholder="e.g. http://dev:3000"
+            value={form.url}
+            onChange={(v) => setForm((f) => ({ ...f, url: v }))}
+          />
+          <FieldInput
+            label="Gateway Prefix (optional)"
+            placeholder={derivedPrefix}
+            hint={`Requests to ${derivedPrefix}/* will be proxied to this service.`}
+            value={form.prefix}
+            onChange={(v) => setForm((f) => ({ ...f, prefix: v }))}
+          />
+
+          <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-xs text-gray-400 space-y-1">
+            <p className="font-medium text-amber-400">What will be created:</p>
+            <p>Backend: <span className="text-white font-mono">{form.name || "..."}</span> → <span className="text-white font-mono">{form.url || "..."}</span></p>
+            <p>Route: <span className="text-white font-mono">{derivedPrefix}/*</span> → strips prefix, forwards to backend</p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="submit"
+              disabled={!form.name || !form.url}
+              className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50"
+            >
+              Create Service
+            </Button>
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="outline"
+              className="flex-1 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ServicesTab({ services, refetch }) {
+  const [showModal, setShowModal] = useState(false);
+
+  const handleDelete = async (service) => {
+    if (!window.confirm(`Delete service "${service.name}" and all its routes?`))
+      return;
+    await api.deleteService(service._id || service.name);
+    refetch();
+  };
+
+  const handleSubmit = async (payload) => {
+    await api.createService(payload);
+    setShowModal(false);
+    refetch();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-400">
+          {services.length} service{services.length !== 1 ? "s" : ""} &bull;
+          unified backend + route management
+        </p>
+        <Button
+          onClick={() => setShowModal(true)}
+          className="bg-amber-500 hover:bg-amber-400 text-black font-semibold h-8 px-4 text-xs gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Service
+        </Button>
+      </div>
+
+      {services.length === 0 ? (
+        <EmptyState
+          message="No services configured"
+          description="Add a microservice to start routing traffic through the gateway"
+          icon="server"
+        />
+      ) : (
+        <div className="space-y-2">
+          {services.map((svc) => (
+            <div
+              key={svc._id || svc.name}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors",
+                svc.isActive
+                  ? "bg-[#111111] border-amber-500/15 hover:border-amber-500/25"
+                  : "bg-[#0a0a0a] border-amber-500/8 opacity-60",
+              )}
+            >
+              <div
+                className={cn(
+                  "w-2 h-2 rounded-full shrink-0",
+                  svc.isActive && svc.routeActive !== false
+                    ? "bg-emerald-400"
+                    : "bg-gray-600",
+                )}
+              />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white truncate">
+                    {svc.name}
+                  </span>
+                  {svc.prefix && (
+                    <span className="text-[10px] px-1.5 py-0 rounded border border-amber-500/30 text-amber-400 bg-amber-400/5 font-mono font-medium shrink-0">
+                      {svc.prefix}
+                    </span>
+                  )}
+                  {svc.routes > 0 && (
+                    <span className="text-[10px] px-1.5 py-0 rounded border border-blue-500/30 text-blue-400 bg-blue-400/5 font-medium shrink-0">
+                      {svc.routes} route{svc.routes !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-600 mt-0.5 truncate">
+                  {svc.url}
+                  {svc.gatewayPath && (
+                    <span className="ml-2 font-mono text-gray-500">
+                      {svc.gatewayPath}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span
+                  className={cn(
+                    "px-2 py-1 rounded text-[11px] font-semibold border",
+                    svc.isActive && svc.routeActive !== false
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-red-500/10 text-red-400 border-red-500/20",
+                  )}
+                >
+                  {svc.isActive && svc.routeActive !== false
+                    ? "Active"
+                    : "Inactive"}
+                </span>
+                {svc.prefix && (
+                  <a
+                    href={svc.prefix}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    title="Open gateway path"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDelete(svc)}
+                  className="bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-400 h-7 w-7 p-0"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <AddServiceModal
+          onClose={() => setShowModal(false)}
+          onSubmit={handleSubmit}
+        />
+      )}
     </div>
   );
 }

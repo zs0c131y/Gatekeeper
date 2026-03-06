@@ -108,6 +108,12 @@ export const api = {
   revokeApiKey: (id) => apiClient.patch(`/api/admin/api-keys/${id}/revoke`),
   deleteApiKey: (id) => apiClient.delete(`/api/admin/api-keys/${id}`),
 
+  // Services (unified backend + route)
+  getServices: () => apiClient.get("/api/settings/services"),
+  createService: (data) => apiClient.post("/api/settings/services", data),
+  deleteService: (nameOrId) =>
+    apiClient.delete(`/api/settings/services/${encodeURIComponent(nameOrId)}`),
+
   // Routes
   getRoutes: () => apiClient.get("/api/settings/routes"),
   createRoute: (data) => apiClient.post("/api/settings/routes", data),
