@@ -8,6 +8,9 @@ import {
   Shield,
   Eye,
   RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Zap as ZapIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -49,6 +52,124 @@ const chartTooltipStyle = {
   borderRadius: "8px",
   fontSize: "12px",
 };
+
+function getSeverityColor(severity) {
+  switch (severity) {
+    case "high":
+      return { bg: "bg-red-500/10", border: "border-red-500/30", text: "text-red-400", badge: "destructive" };
+    case "medium":
+      return { bg: "bg-amber-500/10", border: "border-amber-500/30", text: "text-amber-400", badge: "warning" };
+    case "low":
+      return { bg: "bg-blue-500/10", border: "border-blue-500/30", text: "text-blue-400", badge: "secondary" };
+    default:
+      return { bg: "bg-gray-500/10", border: "border-gray-500/30", text: "text-gray-400", badge: "secondary" };
+  }
+}
+
+function PredictionsSection({ predictions }) {
+  if (!predictions) return null;
+
+  const { overallHealth, trend, confidence, predictedIssues } = predictions;
+
+  const healthColors = {
+    healthy: { bg: "bg-green-500/10", text: "text-green-400", border: "border-green-500/30" },
+    warning: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/30" },
+    critical: { bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/30" },
+    unknown: { bg: "bg-gray-500/10", text: "text-gray-400", border: "border-gray-500/30" },
+  };
+
+  const healthColor = healthColors[overallHealth] || healthColors.unknown;
+  const trendIcon = trend === "degrading" ? TrendingUp : trend === "improving" ? TrendingDown : ZapIcon;
+  const trendColor = trend === "degrading" ? "text-red-400" : trend === "improving" ? "text-green-400" : "text-blue-400";
+
+  return (
+    <Card className={cn("bg-[#111111] border", healthColor.border)}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className={cn("w-5 h-5", healthColor.text)} />
+            <CardTitle className="text-lg">System Health Predictions</CardTitle>
+          </div>
+          <Badge variant={overallHealth === "healthy" ? "outline" : overallHealth === "critical" ? "destructive" : "warning"}>
+            {overallHealth.toUpperCase()}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className={cn("p-4 rounded-lg border", healthColor.bg, healthColor.border)}>
+              <p className="text-xs text-gray-400 mb-1">System Status</p>
+              <p className={cn("text-2xl font-bold capitalize", healthColor.text)}>{overallHealth}</p>
+            </div>
+            <div className="p-4 rounded-lg border border-blue-500/30 bg-blue-500/10">
+              <p className="text-xs text-gray-400 mb-1">Prediction Confidence</p>
+              <p className="text-2xl font-bold text-blue-400">{confidence}%</p>
+            </div>
+          </div>
+
+          {predictedIssues && predictedIssues.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">Predicted Issues ({predictedIssues.length})</p>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {predictedIssues.map((issue, idx) => {
+                  const issueColor = getSeverityColor(issue.severity);
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "p-3 rounded-lg border",
+                        issueColor.bg,
+                        issueColor.border,
+                        "hover:shadow-lg transition-all"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-semibold text-white capitalize">
+                              {issue.type.replace(/_/g, " ")}
+                            </p>
+                            <Badge variant={issueColor.badge} className="text-xs">
+                              {issue.severity}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-300 mb-2">{issue.recommendation}</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-500">Current: </span>
+                              <span className={issueColor.text}>{issue.currentValue}</span>
+                            </div>
+                            {issue.threshold && (
+                              <div>
+                                <span className="text-gray-500">Threshold: </span>
+                                <span className="text-gray-300">{issue.threshold}</span>
+                              </div>
+                            )}
+                            {issue.affectedEndpoint !== "overall" && (
+                              <div className="col-span-2">
+                                <span className="text-gray-500">Endpoint: </span>
+                                <span className="text-gray-300 font-mono">{issue.affectedEndpoint}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/10">
+              <p className="text-sm text-green-400">No issues predicted. System is operating normally.</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function KpiCard({ title, value, subtitle, icon: Icon, color }) {
   const palette = {
@@ -110,6 +231,11 @@ export function Analytics() {
 
   const { data, loading, error, refetch } = useApi(
     () => api.getAnalysis({ hours, ...(routesOnly && { routesOnly: "true" }) }),
+    [hours, routesOnly],
+  );
+
+  const { data: predictionsData, loading: predictionsLoading } = useApi(
+    () => api.getPredictions({ hours, ...(routesOnly && { routesOnly: "true" }) }),
     [hours, routesOnly],
   );
 
@@ -230,6 +356,10 @@ export function Analytics() {
           color="blue"
         />
       </div>
+
+      {!predictionsLoading && predictionsData?.predictions && (
+        <PredictionsSection predictions={predictionsData.predictions} />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-[#111111] border-white/10">
