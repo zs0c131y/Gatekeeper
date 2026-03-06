@@ -11,6 +11,7 @@
 
 const http = require("http");
 const https = require("https");
+const zlib = require("zlib");
 const { URL } = require("url");
 const crypto = require("crypto");
 
@@ -179,7 +180,17 @@ function buildInjectedHeaders(route, globalHeaders) {
   };
 }
 
-async function forwardRequest(req, res, backend, upstreamPath, route) {
+function rewriteHtmlPaths(html, prefix) {
+  // Rewrite absolute paths in HTML attributes to include the gateway prefix.
+  // Matches src="/...", href="/...", action="/...", content="/..." but skips
+  // full URLs (http://, https://, //) and anchors (#).
+  return html.replace(
+    /((?:src|href|action|content|poster)=["'])\/(?!\/|gateway\/)/gi,
+    `$1${prefix}/`,
+  );
+}
+
+async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPrefix) {
   return new Promise(async (resolve, reject) => {
     try {
       const target = new URL(backend.baseUrl);
@@ -259,31 +270,67 @@ async function forwardRequest(req, res, backend, upstreamPath, route) {
         (proxyRes) => {
           const durationMs = Date.now() - start;
 
+          const contentType = proxyRes.headers["content-type"] || "";
+          const isHtml = contentType.includes("text/html");
+          const shouldRewrite = isHtml && gatewayPrefix;
+
           res.status(proxyRes.statusCode);
           for (const [k, v] of Object.entries(proxyRes.headers)) {
-            if (!HOP_BY_HOP.has(k.toLowerCase())) {
-              // Rewrite Location headers on redirects to include the prefix
-              if (
-                k.toLowerCase() === "location" &&
-                route.stripPrefix &&
-                proxyRes.statusCode >= 300 &&
-                proxyRes.statusCode < 400
-              ) {
-                const loc = String(v);
-                // Only rewrite relative paths that don't already have the prefix
-                if (loc.startsWith("/") && !loc.startsWith(route.stripPrefix)) {
-                  res.setHeader(k, route.stripPrefix + loc);
-                  continue;
-                }
+            if (HOP_BY_HOP.has(k.toLowerCase())) continue;
+
+            // Rewrite Location headers on redirects to include the prefix
+            if (
+              k.toLowerCase() === "location" &&
+              route.stripPrefix &&
+              proxyRes.statusCode >= 300 &&
+              proxyRes.statusCode < 400
+            ) {
+              const loc = String(v);
+              if (loc.startsWith("/") && !loc.startsWith(gatewayPrefix)) {
+                res.setHeader(k, gatewayPrefix + loc);
+                continue;
               }
-              res.setHeader(k, v);
             }
+
+            // Skip content-length for HTML we'll rewrite (length will change)
+            if (shouldRewrite && k.toLowerCase() === "content-length") continue;
+            // Skip content-encoding — we'll decompress and re-send plain
+            if (shouldRewrite && k.toLowerCase() === "content-encoding") continue;
+
+            res.setHeader(k, v);
           }
 
-          proxyRes.pipe(res);
-          proxyRes.on("end", () =>
-            resolve({ statusCode: proxyRes.statusCode, durationMs }),
-          );
+          if (shouldRewrite) {
+            // Buffer entire HTML response, rewrite paths, send
+            const encoding = proxyRes.headers["content-encoding"];
+            let stream = proxyRes;
+
+            if (encoding === "gzip" || encoding === "br" || encoding === "deflate") {
+              if (encoding === "gzip") stream = proxyRes.pipe(zlib.createGunzip());
+              else if (encoding === "br") stream = proxyRes.pipe(zlib.createBrotliDecompress());
+              else stream = proxyRes.pipe(zlib.createInflate());
+            }
+
+            const chunks = [];
+            stream.on("data", (chunk) => chunks.push(chunk));
+            stream.on("end", () => {
+              let html = Buffer.concat(chunks).toString("utf8");
+              html = rewriteHtmlPaths(html, gatewayPrefix);
+              res.setHeader("content-length", Buffer.byteLength(html));
+              res.end(html);
+              resolve({ statusCode: proxyRes.statusCode, durationMs });
+            });
+            stream.on("error", (err) => {
+              logger.error("[proxy] HTML rewrite stream error", { error: err.message });
+              res.end();
+              resolve({ statusCode: proxyRes.statusCode, durationMs });
+            });
+          } else {
+            proxyRes.pipe(res);
+            proxyRes.on("end", () =>
+              resolve({ statusCode: proxyRes.statusCode, durationMs }),
+            );
+          }
         },
       );
 
@@ -316,6 +363,10 @@ function createProxyMiddleware(backend, route) {
     const traceId =
       req.traceId || `gk-${crypto.randomBytes(6).toString("hex")}`;
     const upstreamPath = transformPath(req.path, route);
+    // Full external prefix = Express mount point + route stripPrefix
+    const gatewayPrefix = route.stripPrefix
+      ? (req.baseUrl || "") + route.stripPrefix
+      : "";
 
     req.traceId = traceId;
     res.setHeader("X-Gateway-Id", process.env.GATEWAY_ID || "gateway-1");
@@ -334,6 +385,7 @@ function createProxyMiddleware(backend, route) {
         backend,
         upstreamPath,
         route,
+        gatewayPrefix,
       );
       statusCode = result.statusCode;
 
