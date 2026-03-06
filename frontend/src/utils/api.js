@@ -54,6 +54,7 @@ export const api = {
   getErrors: (params) => apiClient.get("/api/analytics/errors", { params }),
   getSummary: (params) => apiClient.get("/api/analytics/summary", { params }),
   getAnalysis: (params) => apiClient.get("/api/analytics/analysis", { params }),
+  getPredictions: (params) => apiClient.get("/api/analytics/predictions", { params }),
   getClients: () => apiClient.get("/api/analytics/clients"),
 
   // Logs
