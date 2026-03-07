@@ -6,6 +6,7 @@ const { Router } = require("express");
 const Log = require("../src/models/Log");
 const Analytics = require("../src/models/Analytics");
 const ClientProfile = require("../src/models/ClientProfile");
+const { generatePredictions } = require("../src/lib/predictor");
 
 const router = Router();
 
@@ -352,6 +353,16 @@ router.get("/analysis", async (req, res, next) => {
       topErrorEndpoints: buildTopErrorEndpoints(logs),
       endpointPerformance: endpointMetrics.slice(0, 10),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/predictions", async (req, res, next) => {
+  try {
+    const hours = Math.min(toNumber(req.query.hours, 24), 168);
+    const result = await generatePredictions(hours);
+    res.json(result);
   } catch (err) {
     next(err);
   }
