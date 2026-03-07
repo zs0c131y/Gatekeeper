@@ -3,8 +3,8 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
-ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
+# ARG VITE_API_URL
+ENV VITE_API_URL=https://gatekeeper-full.fly.dev
 RUN npm run build
 
 FROM node:20-alpine AS backend-builder

@@ -11,9 +11,26 @@
 
 const http = require("http");
 const https = require("https");
-const zlib = require("zlib");
 const { URL } = require("url");
 const crypto = require("crypto");
+
+// Persistent keep-alive agents avoid per-request TCP handshakes and the
+// Happy Eyeballs (autoSelectFamily) IPv6→IPv4 fallback delay that causes
+// AggregateError / ETIMEDOUT when many concurrent requests hit the proxy.
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  maxSockets: 64,
+  maxFreeSockets: 16,
+  family: 4, // force IPv4 — avoids IPv6 timeout on local/Docker backends
+});
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  maxSockets: 64,
+  maxFreeSockets: 16,
+  family: 4,
+});
 
 const Config = require("../models/Config");
 const Route = require("../models/Route");
@@ -196,7 +213,7 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
       const target = new URL(backend.baseUrl);
       const isHttps = target.protocol === "https:";
       const transport = isHttps ? https : http;
-      const timeout = backend.timeout ?? 5000;
+      const timeout = backend.timeout ?? 15000;
 
       const qs = req.url.includes("?")
         ? req.url.slice(req.url.indexOf("?"))
@@ -270,6 +287,7 @@ async function forwardRequest(req, res, backend, upstreamPath, route, gatewayPre
           method: req.method,
           headers: forwardHeaders,
           timeout,
+          agent: isHttps ? httpsAgent : httpAgent,
           ...(isHttps ? { servername: target.hostname } : {}),
         },
         (proxyRes) => {

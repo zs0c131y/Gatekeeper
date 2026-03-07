@@ -33,7 +33,6 @@ async function recordClientRequest(clientId, clientType, opts = {}) {
         blockedRequests: 0,
         rateLimitViolations: 0,
         behaviorScore: 100,
-        avgRequestInterval: 0,
       },
     };
 
@@ -52,7 +51,7 @@ async function recordClientRequest(clientId, clientType, opts = {}) {
 
     await ClientProfile.findOneAndUpdate({ clientId }, update, {
       upsert: true,
-      new: true,
+      returnDocument: "after",
     });
   } catch (err) {
     logger.error("[ClientProfiler] recordClientRequest failed", {
@@ -73,7 +72,7 @@ async function recordViolation(clientId) {
         $inc: { rateLimitViolations: 1, blockedRequests: 1 },
         $set: { lastSeen: new Date() },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (
