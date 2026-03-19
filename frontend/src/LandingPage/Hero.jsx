@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Github } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from './ui/Button';
@@ -67,19 +67,50 @@ function ParticleCanvas() {
 }
 
 export function Hero() {
+    const sectionRef = useRef(null);
+
+    // Track scroll progress of the hero section as it leaves the viewport
+    const { scrollYProgress } = useScroll({
+        target: sectionRef,
+        offset: ['start start', 'end start'],
+    });
+
+    // Background blobs move at different rates — creates depth illusion
+    const blob1Y = useTransform(scrollYProgress, [0, 1], [0, -180]);
+    const blob2Y = useTransform(scrollYProgress, [0, 1], [0, 120]);
+
+    // Code window drifts down slightly — floats behind the text
+    const codeY = useTransform(scrollYProgress, [0, 1], [0, 80]);
+
+    // Text content moves up gently — faster than window, slower than blobs
+    const contentY = useTransform(scrollYProgress, [0, 1], [0, -50]);
+
     return (
-        <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
-            {/* Animated Gradient Background */}
+        <section
+            ref={sectionRef}
+            className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16"
+        >
+            {/* ── Parallax Background ── */}
             <div className="absolute inset-0 bg-background">
                 <div className="absolute inset-0 bg-gradient-radial from-primary/5 via-transparent to-transparent" />
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl animate-pulse delay-1000" />
+                <motion.div
+                    style={{ y: blob1Y }}
+                    className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse"
+                />
+                <motion.div
+                    style={{ y: blob2Y }}
+                    className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl animate-pulse delay-1000"
+                />
             </div>
 
-            {/* Subtle Particle Effects */}
+            {/* Particles sit above background but don't scroll */}
             <ParticleCanvas />
 
-            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-8 py-20 text-center">
+            {/* ── Text Content (mild upward drift) ── */}
+            <motion.div
+                style={{ y: contentY }}
+                className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-8 pt-20 pb-8 text-center"
+            >
                 {/* Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -130,26 +161,33 @@ export function Hero() {
                         View on GitHub
                     </Button>
                 </motion.div>
+            </motion.div>
 
-                {/* Code Window Mockup */}
+            {/* ── Code Window (separate parallax layer — drifts down slower) ── */}
+            <motion.div
+                style={{ y: codeY }}
+                className="absolute bottom-0 left-0 right-0 z-10 w-full max-w-3xl mx-auto px-4 md:px-8"
+            >
+                {/* Entry animation wraps the card itself */}
                 <motion.div
                     initial={{ opacity: 0, y: 40 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.7, delay: 0.4 }}
-                    className="max-w-3xl mx-auto"
                 >
                     <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xl">
-                        {/* Window Header */}
+                        {/* Window chrome */}
                         <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-background-secondary">
                             <div className="flex gap-2">
                                 <div className="w-3 h-3 rounded-full bg-accent-red/60" />
                                 <div className="w-3 h-3 rounded-full bg-primary/60" />
                                 <div className="w-3 h-3 rounded-full bg-success/60" />
                             </div>
-                            <span className="text-xs text-text-muted font-mono ml-4">gateway.config.yaml</span>
+                            <span className="text-xs text-text-muted font-mono ml-4">
+                                gateway.config.yaml
+                            </span>
                         </div>
 
-                        {/* Code Content */}
+                        {/* Code */}
                         <div className="p-6 text-left font-mono text-sm overflow-x-auto">
                             <pre className="text-text-secondary">
                                 <code>
@@ -171,7 +209,7 @@ export function Hero() {
                         </div>
                     </div>
                 </motion.div>
-            </div>
+            </motion.div>
         </section>
     );
 }
