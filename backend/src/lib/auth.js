@@ -71,18 +71,31 @@ function initAuth(db, redisClient) {
   if (redisClient) {
     secondaryStorage = {
       get: async (key) => {
-        const val = await redisClient.get(`ba:${key}`);
-        return val;
+        try {
+          const val = await redisClient.get(`ba:${key}`);
+          return val;
+        } catch {
+          // Redis unavailable — degrade gracefully, let better-auth fall back to MongoDB
+          return null;
+        }
       },
       set: async (key, value, ttl) => {
-        if (ttl) {
-          await redisClient.set(`ba:${key}`, value, "EX", ttl);
-        } else {
-          await redisClient.set(`ba:${key}`, value);
+        try {
+          if (ttl) {
+            await redisClient.set(`ba:${key}`, value, "EX", ttl);
+          } else {
+            await redisClient.set(`ba:${key}`, value);
+          }
+        } catch {
+          // Redis unavailable — no-op, session will be stored in MongoDB only
         }
       },
       delete: async (key) => {
-        await redisClient.del(`ba:${key}`);
+        try {
+          await redisClient.del(`ba:${key}`);
+        } catch {
+          // Redis unavailable — no-op
+        }
       },
     };
   }
