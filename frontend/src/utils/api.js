@@ -57,6 +57,19 @@ export const api = {
   getPredictions: (params) => apiClient.get("/api/analytics/predictions", { params }),
   getClients: () => apiClient.get("/api/analytics/clients"),
 
+  // Client Profiler
+  getClientProfiles: (params) => apiClient.get("/api/clients", { params }),
+  getClientProfile: (clientId) =>
+    apiClient.get(`/api/clients/${encodeURIComponent(clientId)}`),
+  blockClient: (clientId, blocked) =>
+    apiClient.patch(`/api/clients/${encodeURIComponent(clientId)}/block`, { blocked }),
+  whitelistClient: (clientId, whitelisted) =>
+    apiClient.patch(`/api/clients/${encodeURIComponent(clientId)}/whitelist`, { whitelisted }),
+  updateClientNotes: (clientId, notes) =>
+    apiClient.patch(`/api/clients/${encodeURIComponent(clientId)}/notes`, { notes }),
+  setClientRateLimit: (clientId, rateLimit) =>
+    apiClient.patch(`/api/clients/${encodeURIComponent(clientId)}/rate-limit`, { rateLimit }),
+
   // Logs
   getLogs: (params) => apiClient.get("/api/logs", { params }),
   getLogByTraceId: (traceId) => apiClient.get(`/api/logs/${traceId}`),

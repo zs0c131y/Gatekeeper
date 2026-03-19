@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import {
   Activity,
@@ -12,6 +12,12 @@ import {
   TrendingUp,
   TrendingDown,
   Zap as ZapIcon,
+  Search,
+  ShieldCheck,
+  ShieldX,
+  Ban,
+  CheckCircle,
+  Users,
 } from "lucide-react";
 import { downloadCSV, downloadJSON } from "../../utils/export";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +178,280 @@ function KpiCard({ title, value, subtitle, icon: Icon, color }) {
   );
 }
 
+function getScoreColor(score) {
+  if (score >= 80) return "text-green-400";
+  if (score >= 50) return "text-amber-400";
+  return "text-red-400";
+}
+
+function ClientActivityTable() {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("requests");
+  const [actionLoading, setActionLoading] = useState(null);
+
+  const params = {
+    limit: 50,
+    sort,
+    order: "desc",
+    ...(search && { search }),
+    ...(filter === "blocked" && { blocked: "true" }),
+    ...(filter === "whitelisted" && { whitelisted: "true" }),
+  };
+
+  const { data, loading, error, refetch } = useApi(
+    () => api.getClientProfiles(params),
+    [search, filter, sort],
+  );
+
+  const handleBlock = useCallback(
+    async (clientId, blocked) => {
+      setActionLoading(clientId);
+      try {
+        await api.blockClient(clientId, blocked);
+        await refetch();
+      } catch (err) {
+        console.error("Failed to update block status:", err);
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [refetch],
+  );
+
+  const handleWhitelist = useCallback(
+    async (clientId, whitelisted) => {
+      setActionLoading(clientId);
+      try {
+        await api.whitelistClient(clientId, whitelisted);
+        await refetch();
+      } catch (err) {
+        console.error("Failed to update whitelist status:", err);
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [refetch],
+  );
+
+  if (loading) return <TableLoading rows={8} />;
+  if (error) return <ErrorMessage error={error} onRetry={refetch} />;
+
+  const clients = data?.clients || [];
+
+  return (
+    <Card className="bg-[#111111] border-white/10">
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-amber-400" />
+            <CardTitle className="text-lg">Client Activity</CardTitle>
+            {data?.total != null && (
+              <Badge variant="secondary">{data.total} clients</Badge>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search client IP..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-9 pl-9 pr-3 rounded-md bg-[#0a0a0a] border border-white/10 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/50 w-48"
+              />
+            </div>
+
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-[130px] h-9 bg-[#0a0a0a] border-white/10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Clients</SelectItem>
+                <SelectItem value="blocked">Blocked</SelectItem>
+                <SelectItem value="whitelisted">Whitelisted</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger className="w-[130px] h-9 bg-[#0a0a0a] border-white/10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="requests">Requests</SelectItem>
+                <SelectItem value="score">Score</SelectItem>
+                <SelectItem value="violations">Violations</SelectItem>
+                <SelectItem value="lastSeen">Last Seen</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button onClick={refetch} variant="outline" size="sm">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {clients.length === 0 ? (
+          <EmptyState message="No client profiles found" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-gray-400">
+                  <th className="text-left py-3 px-3 font-medium">Client</th>
+                  <th className="text-right py-3 px-3 font-medium">Score</th>
+                  <th className="text-right py-3 px-3 font-medium">Requests</th>
+                  <th className="text-right py-3 px-3 font-medium">Violations</th>
+                  <th className="text-right py-3 px-3 font-medium">Blocked Req</th>
+                  <th className="text-right py-3 px-3 font-medium">Avg Latency</th>
+                  <th className="text-center py-3 px-3 font-medium">Status</th>
+                  <th className="text-right py-3 px-3 font-medium">Last Seen</th>
+                  <th className="text-center py-3 px-3 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((client) => (
+                  <tr
+                    key={client.clientId}
+                    className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-white text-xs">
+                          {client.clientId}
+                        </span>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {client.clientType}
+                        </Badge>
+                      </div>
+                    </td>
+                    <td className="text-right py-3 px-3">
+                      <span
+                        className={cn(
+                          "font-bold font-mono",
+                          getScoreColor(client.behaviorScore),
+                        )}
+                      >
+                        {client.behaviorScore}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-3 font-mono text-white">
+                      {client.totalRequests.toLocaleString()}
+                    </td>
+                    <td className="text-right py-3 px-3">
+                      <span
+                        className={cn(
+                          "font-mono",
+                          client.rateLimitViolations > 0
+                            ? "text-red-400"
+                            : "text-gray-500",
+                        )}
+                      >
+                        {client.rateLimitViolations}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-3 font-mono text-gray-400">
+                      {client.blockedRequests}
+                    </td>
+                    <td className="text-right py-3 px-3 font-mono text-gray-400">
+                      {client.avgLatency ? `${client.avgLatency}ms` : "\u2014"}
+                    </td>
+                    <td className="text-center py-3 px-3">
+                      {client.isWhitelisted ? (
+                        <Badge
+                          variant="outline"
+                          className="border-green-500/30 text-green-400 text-[10px]"
+                        >
+                          Whitelisted
+                        </Badge>
+                      ) : client.isBlocked ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Blocked
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Active
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="text-right py-3 px-3 text-gray-500 text-xs">
+                      {client.lastSeen
+                        ? new Date(client.lastSeen).toLocaleString()
+                        : "\u2014"}
+                    </td>
+                    <td className="text-center py-3 px-3">
+                      <div className="flex items-center justify-center gap-1">
+                        {client.isBlocked ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                            onClick={() =>
+                              handleBlock(client.clientId, false)
+                            }
+                            disabled={actionLoading === client.clientId}
+                            title="Unblock"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            onClick={() =>
+                              handleBlock(client.clientId, true)
+                            }
+                            disabled={actionLoading === client.clientId}
+                            title="Block"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+
+                        {client.isWhitelisted ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-gray-400 hover:text-gray-300 hover:bg-gray-500/10"
+                            onClick={() =>
+                              handleWhitelist(client.clientId, false)
+                            }
+                            disabled={actionLoading === client.clientId}
+                            title="Remove from whitelist"
+                          >
+                            <ShieldX className="w-3.5 h-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                            onClick={() =>
+                              handleWhitelist(client.clientId, true)
+                            }
+                            disabled={actionLoading === client.clientId}
+                            title="Whitelist"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Analytics() {
   const [hours, setHours] = useState(24);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -265,6 +545,9 @@ export function Analytics() {
           color="blue"
         />
       </div>
+
+      {/* Client Activity Table */}
+      <ClientActivityTable />
     </div>
   );
 }

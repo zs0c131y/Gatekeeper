@@ -1,83 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { Activity, Clock, CheckCircle, TrendingUp, Wifi, WifiOff } from 'lucide-react';
 import { Section, SectionHeader } from './ui/Section';
 import { GlassCard } from './ui/Card';
+import { io } from 'socket.io-client';
 
-function useAnimatedCounter(end, duration = 2000, start = 0) {
-    const [count, setCount] = useState(start);
-    const [isVisible, setIsVisible] = useState(false);
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
-    useEffect(() => {
-        if (!isVisible) return;
-
-        let startTime;
-        let animationFrame;
-
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const progress = Math.min((timestamp - startTime) / duration, 1);
-
-            setCount(Math.floor(progress * (end - start) + start));
-
-            if (progress < 1) {
-                animationFrame = requestAnimationFrame(animate);
-            }
-        };
-
-        animationFrame = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(animationFrame);
-    }, [end, duration, start, isVisible]);
-
-    return { count, setIsVisible };
-}
-
-function MetricCard({ icon: Icon, label, value, suffix = '', prefix = '' }) {
-    const { count, setIsVisible } = useAnimatedCounter(value);
-
-    return (
-        <motion.div
-            onViewportEnter={() => setIsVisible(true)}
-            viewport={{ once: true }}
-        >
-            <GlassCard className="text-center">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4">
-                    <Icon className="w-6 h-6 text-primary" />
-                </div>
-                <div className="text-3xl md:text-4xl font-bold font-mono text-text-primary mb-1">
-                    {prefix}{count.toLocaleString()}{suffix}
-                </div>
-                <div className="text-sm text-text-secondary">{label}</div>
-            </GlassCard>
-        </motion.div>
-    );
-}
-
-function SparkLine() {
-    const [points, setPoints] = useState([30, 45, 35, 60, 50, 75, 65, 80, 70, 90, 85, 95]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setPoints(prev => {
-                const newPoints = [...prev.slice(1), Math.random() * 40 + 60];
-                return newPoints;
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
+function SparkLine({ points }) {
     const pathData = points
         .map((y, i) => `${i === 0 ? 'M' : 'L'} ${i * (100 / (points.length - 1))} ${100 - y}`)
         .join(' ');
 
     return (
         <svg viewBox="0 0 100 100" className="w-full h-24" preserveAspectRatio="none">
-            {/* Grid lines */}
             {[25, 50, 75].map((y) => (
                 <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="#262626" strokeWidth="0.5" />
             ))}
 
-            {/* Gradient fill */}
             <defs>
                 <linearGradient id="sparkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3" />
@@ -89,7 +29,6 @@ function SparkLine() {
                 fill="url(#sparkGradient)"
             />
 
-            {/* Line */}
             <motion.path
                 d={pathData}
                 fill="none"
@@ -104,14 +43,94 @@ function SparkLine() {
 }
 
 export function LiveMetrics() {
-    const [requestCount, setRequestCount] = useState(847523);
+    const [connected, setConnected] = useState(false);
+    const [totalRequests, setTotalRequests] = useState(null);
+    const [avgLatency, setAvgLatency] = useState(null);
+    const [successRate, setSuccessRate] = useState(null);
+    const [reqPerSec, setReqPerSec] = useState(null);
+    const [sparkPoints, setSparkPoints] = useState(Array(12).fill(50));
+    const socketRef = useRef(null);
+    const totalRef = useRef(0);
+    const successCountRef = useRef(0);
+    const errorCountRef = useRef(0);
 
+    // Fetch initial data from /api/status
     useEffect(() => {
-        const interval = setInterval(() => {
-            setRequestCount(prev => prev + Math.floor(Math.random() * 10 + 1));
-        }, 100);
-        return () => clearInterval(interval);
+        async function fetchInitial() {
+            try {
+                const res = await fetch(`${API_BASE}/api/status`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTotalRequests(data.requestCount || 0);
+                    totalRef.current = data.requestCount || 0;
+                    if (data.avgLatency) setAvgLatency(data.avgLatency);
+                }
+            } catch {
+                // Will fall back to WebSocket data
+            }
+        }
+        fetchInitial();
     }, []);
+
+    // Connect to WebSocket for live updates
+    useEffect(() => {
+        const socket = io(`${API_BASE}/dashboard`, {
+            transports: ['websocket', 'polling'],
+            withCredentials: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+        });
+
+        socketRef.current = socket;
+
+        socket.on('connect', () => setConnected(true));
+        socket.on('disconnect', () => setConnected(false));
+
+        socket.on('traffic:update', (data) => {
+            // Accumulate total requests
+            if (data.requestCount > 0) {
+                totalRef.current += data.requestCount;
+                setTotalRequests(totalRef.current);
+            }
+
+            // Track success/error for rate calculation
+            successCountRef.current += (data.requestCount - (data.errorCount || 0));
+            errorCountRef.current += (data.errorCount || 0);
+            const totalSeen = successCountRef.current + errorCountRef.current;
+            if (totalSeen > 0) {
+                setSuccessRate(
+                    ((successCountRef.current / totalSeen) * 100).toFixed(2),
+                );
+            }
+
+            // Update avg latency
+            if (data.avgLatency > 0) {
+                setAvgLatency(data.avgLatency);
+            }
+
+            // Update req/sec
+            setReqPerSec(data.reqPerSec || 0);
+
+            // Update sparkline points (normalize reqPerSec to 0-100 range)
+            setSparkPoints((prev) => {
+                const val = Math.min(100, Math.max(5, (data.reqPerSec || 0) * 5 + 30));
+                return [...prev.slice(1), val];
+            });
+        });
+
+        return () => {
+            socket.disconnect();
+            socketRef.current = null;
+        };
+    }, []);
+
+    // Display values with fallbacks
+    const displayRequests = totalRequests != null ? totalRequests : 0;
+    const displayLatency = avgLatency != null ? `${avgLatency}ms` : '\u2014';
+    const displaySuccessRate = successRate != null ? `${successRate}%` : '\u2014';
+    const displayReqPerSec = reqPerSec != null ? reqPerSec : 0;
 
     return (
         <Section id="metrics">
@@ -125,27 +144,33 @@ export function LiveMetrics() {
                     <GlassCard className="text-center flex flex-col items-center justify-center py-6">
                         <Activity className="w-6 h-6 text-primary mb-3" />
                         <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">
-                            {requestCount.toLocaleString()}
+                            {displayRequests.toLocaleString()}
                         </div>
                         <div className="text-xs text-text-secondary mt-1">Total Requests</div>
                     </GlassCard>
 
                     <GlassCard className="text-center flex flex-col items-center justify-center py-6">
                         <Clock className="w-6 h-6 text-primary mb-3" />
-                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">2.3ms</div>
+                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">
+                            {displayLatency}
+                        </div>
                         <div className="text-xs text-text-secondary mt-1">Avg Latency</div>
                     </GlassCard>
 
                     <GlassCard className="text-center flex flex-col items-center justify-center py-6">
                         <CheckCircle className="w-6 h-6 text-success mb-3" />
-                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">99.97%</div>
+                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">
+                            {displaySuccessRate}
+                        </div>
                         <div className="text-xs text-text-secondary mt-1">Success Rate</div>
                     </GlassCard>
 
                     <GlassCard className="text-center flex flex-col items-center justify-center py-6">
                         <TrendingUp className="w-6 h-6 text-primary mb-3" />
-                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">1.2M</div>
-                        <div className="text-xs text-text-secondary mt-1">Req/min</div>
+                        <div className="text-2xl md:text-3xl font-bold font-mono text-text-primary">
+                            {displayReqPerSec}
+                        </div>
+                        <div className="text-xs text-text-secondary mt-1">Req/sec</div>
                     </GlassCard>
                 </div>
 
@@ -153,9 +178,18 @@ export function LiveMetrics() {
                 <div className="bg-background rounded-xl border border-border p-4">
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-text-primary">Traffic Over Time</span>
-                        <span className="text-xs text-text-secondary font-mono">Live</span>
+                        <div className="flex items-center gap-2">
+                            {connected ? (
+                                <Wifi className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                                <WifiOff className="w-3.5 h-3.5 text-gray-500" />
+                            )}
+                            <span className={`text-xs font-mono ${connected ? 'text-green-400' : 'text-gray-500'}`}>
+                                {connected ? 'Live' : 'Connecting...'}
+                            </span>
+                        </div>
                     </div>
-                    <SparkLine />
+                    <SparkLine points={sparkPoints} />
                 </div>
             </div>
         </Section>

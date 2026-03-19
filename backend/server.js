@@ -31,6 +31,7 @@ const settingsRoutes = require("./routes/settings");
 
 const userRoutes = require("./src/routes/user");
 const apiKeyRoutes = require("./src/routes/apiKeys");
+const clientProfilerRoutes = require("./src/routes/clientProfiler");
 
 const gatewayRoutes = require("./src/routes/gateway");
 
@@ -180,6 +181,7 @@ app.use("/api/settings", settingsRoutes);
 
 app.use("/api/user", userRoutes);
 app.use("/api/admin/api-keys", apiKeyRoutes);
+app.use("/api/clients", clientProfilerRoutes);
 
 app.use("/gateway", gatewayRoutes);
 
