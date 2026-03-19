@@ -617,13 +617,13 @@ function ServicesTab({ services, refetch }) {
                     ? "Active"
                     : "Inactive"}
                 </span>
-                {svc.prefix && (
+                {svc.url && (
                   <a
-                    href={svc.prefix}
+                    href={svc.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1.5 rounded text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                    title="Open gateway path"
+                    title="Open service URL"
                   >
                     <ExternalLink className="w-3 h-3" />
                   </a>
