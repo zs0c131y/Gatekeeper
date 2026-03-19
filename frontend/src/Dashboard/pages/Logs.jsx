@@ -35,7 +35,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useApi } from "../../hooks/useApi";
-import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import { api } from "../../utils/api";
 import { TableLoading } from "../../components/common/LoadingSkeleton";
 import { ErrorMessage } from "../../components/common/ErrorMessage";
@@ -226,7 +225,6 @@ function LogDetailModal({ log, onClose }) {
 }
 
 export function Logs() {
-  const { routesOnly } = useGatewayFilter();
   const [selectedLog, setSelectedLog] = useState(null);
   const [liveUpdates, setLiveUpdates] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -247,7 +245,6 @@ export function Logs() {
   const queryParams = {
     page,
     limit,
-    ...(routesOnly && { routesOnly: "true" }),
     ...Object.fromEntries(
       Object.entries(filters).filter(([_, value]) => value !== ""),
     ),
@@ -261,7 +258,7 @@ export function Logs() {
     refetch,
   } = useApi(
     () => api.getLogs(queryParams),
-    [page, limit, routesOnly, JSON.stringify(filters)],
+    [page, limit, JSON.stringify(filters)],
   );
 
   useEffect(() => {
@@ -277,7 +274,7 @@ export function Logs() {
     if (!canStream) return;
 
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-    const streamUrl = `${baseUrl}/api/logs/stream/live${routesOnly ? "?routesOnly=true" : ""}`;
+    const streamUrl = `${baseUrl}/api/logs/stream/live`;
     const es = new EventSource(streamUrl);
 
     es.onmessage = (event) => {
@@ -299,7 +296,7 @@ export function Logs() {
     };
 
     return () => es.close();
-  }, [liveUpdates, isPaused, canStream, limit, routesOnly]);
+  }, [liveUpdates, isPaused, canStream, limit]);
 
   // Polling fallback when live mode is enabled but filtered/paginated.
   useEffect(() => {

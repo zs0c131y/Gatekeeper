@@ -1,17 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Activity, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { Activity, Clock, CheckCircle, TrendingUp, Wifi, WifiOff } from 'lucide-react';
 import { Section, SectionHeader } from './ui/Section';
 import { GlassCard } from './ui/Card';
+import { io } from 'socket.io-client';
 
-/* ── Simulated metrics ── */
-const BASE = {
-    totalRequests: 24847,
-    avgLatency: 8,
-    successRate: 99.7,
-    reqPerSec: 142,
-    spark: [38, 52, 45, 68, 60, 75, 58, 82, 70, 88, 78, 92],
-};
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 /* ── Animated count-up hook ── */
 function useCountUp(target, duration = 1400, active = true) {
@@ -20,12 +14,13 @@ function useCountUp(target, duration = 1400, active = true) {
     useEffect(() => {
         if (!active) return;
         const start = Date.now();
+        const from = 0;
 
         const tick = () => {
             const elapsed = Date.now() - start;
             const progress = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3);
-            setValue(Math.round(target * eased));
+            setValue(Math.round(from + (target - from) * eased));
             if (progress < 1) requestAnimationFrame(tick);
         };
 
@@ -37,7 +32,7 @@ function useCountUp(target, duration = 1400, active = true) {
 
 /* ── Sparkline SVG ── */
 function SparkLine({ points }) {
-    const safePoints = points.length < 2 ? Array(12).fill(50) : points;
+    const safePoints = points.length < 2 ? Array(12).fill(0) : points;
 
     const pathData = safePoints
         .map((y, i) => `${i === 0 ? 'M' : 'L'} ${i * (100 / (safePoints.length - 1))} ${100 - y}`)
@@ -117,24 +112,52 @@ export function LiveMetrics() {
     const sectionRef = useRef(null);
     const isInView = useInView(sectionRef, { once: true, margin: '-80px' });
 
-    const [sparkPoints, setSparkPoints] = useState(BASE.spark);
+    const [connected, setConnected] = useState(false);
+    const [metrics, setMetrics] = useState({ totalRequests: 0, avgLatency: 0, successRate: null, reqPerSec: 0 });
+    const [sparkPoints, setSparkPoints] = useState(Array(12).fill(0));
 
-    /* Keep sparkline animated with simulated traffic */
     useEffect(() => {
-        const id = setInterval(() => {
-            setSparkPoints(prev => {
-                const last = prev[prev.length - 1];
-                const delta = (Math.random() - 0.4) * 18;
-                const next = Math.min(96, Math.max(18, last + delta));
-                return [...prev.slice(1), Math.round(next)];
+        const socket = io(`${API_BASE}/dashboard`, {
+            transports: ['websocket', 'polling'],
+            withCredentials: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+        });
+
+        socket.on('connect', () => setConnected(true));
+        socket.on('disconnect', () => setConnected(false));
+
+        const totalRef = { current: 0 };
+        const successRef = { current: 0 };
+        const errorRef = { current: 0 };
+
+        socket.on('traffic:update', (data) => {
+            if (data.requestCount > 0) totalRef.current += data.requestCount;
+            successRef.current += data.requestCount - (data.errorCount || 0);
+            errorRef.current += data.errorCount || 0;
+
+            const total = successRef.current + errorRef.current;
+            setMetrics({
+                totalRequests: totalRef.current,
+                avgLatency: data.avgLatency || 0,
+                successRate: total > 0 ? ((successRef.current / total) * 100).toFixed(1) : null,
+                reqPerSec: data.reqPerSec || 0,
             });
-        }, 1500);
-        return () => clearInterval(id);
+
+            setSparkPoints(prev => {
+                const val = Math.min(96, Math.max(0, (data.reqPerSec || 0) * 5));
+                return [...prev.slice(1), val];
+            });
+        });
+
+        return () => socket.disconnect();
     }, []);
 
-    const countRequests = useCountUp(BASE.totalRequests, 1600, isInView);
-    const countLatency  = useCountUp(BASE.avgLatency,    1200, isInView);
-    const countReqSec   = useCountUp(BASE.reqPerSec,     1000, isInView);
+    const countRequests = useCountUp(metrics.totalRequests, 1600, isInView);
+    const countLatency  = useCountUp(metrics.avgLatency,    1200, isInView);
+    const countReqSec   = useCountUp(metrics.reqPerSec,     1000, isInView);
 
     return (
         <div ref={sectionRef}>
@@ -172,7 +195,7 @@ export function LiveMetrics() {
                         icon={CheckCircle}
                         iconColor="text-green-400"
                         label="Success Rate"
-                        value={isInView ? `${BASE.successRate}%` : '0%'}
+                        value={metrics.successRate != null ? `${metrics.successRate}%` : '—%'}
                         delay={0.16}
                     />
                     <MetricCard
@@ -188,7 +211,15 @@ export function LiveMetrics() {
                 <div className="bg-background rounded-xl border border-border p-4">
                     <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-text-primary">Traffic Over Time</span>
-                        <span className="text-xs font-mono text-text-muted">simulated</span>
+                        <div className="flex items-center gap-1.5">
+                            {connected
+                                ? <Wifi className="w-3.5 h-3.5 text-green-400" />
+                                : <WifiOff className="w-3.5 h-3.5 text-gray-600" />
+                            }
+                            <span className={`text-xs font-mono ${connected ? 'text-green-400' : 'text-gray-500'}`}>
+                                {connected ? 'Live' : 'Offline'}
+                            </span>
+                        </div>
                     </div>
 
                     <SparkLine points={sparkPoints} />

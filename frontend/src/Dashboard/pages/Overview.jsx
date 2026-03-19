@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import {
   TrendingUp,
   TrendingDown,
@@ -11,7 +10,6 @@ import {
   Wifi,
   PlayCircle,
   PauseCircle,
-  Filter,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -115,16 +113,12 @@ function MetricCard({ title, value, change, trend, icon: Icon, color }) {
 }
 
 export function Overview() {
-  const { routesOnly, setRoutesOnly } = useGatewayFilter();
   const {
     data: overviewData,
     loading,
     error,
     refetch,
-  } = useApi(
-    () => api.getOverview(routesOnly ? { routesOnly: "true" } : {}),
-    [routesOnly],
-  );
+  } = useApi(() => api.getOverview({}), []);
   const { data: alertsData, refetch: refetchAlerts } = useApi(() =>
     api.getOverviewAlerts(),
   );
@@ -230,8 +224,7 @@ export function Overview() {
   useEffect(() => {
     if (isPaused) return;
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-    const qs = routesOnly ? "?routesOnly=true" : "";
-    const es = new EventSource(`${baseUrl}/api/overview/traffic/stream${qs}`);
+    const es = new EventSource(`${baseUrl}/api/overview/traffic/stream`);
     es.onmessage = (event) => {
       try {
         const { requests } = JSON.parse(event.data);
@@ -244,7 +237,7 @@ export function Overview() {
       }
     };
     return () => es.close();
-  }, [isPaused, routesOnly]);
+  }, [isPaused]);
 
   // Auto-refresh every 30 seconds — stable interval that never resets
   useEffect(() => {
@@ -311,26 +304,6 @@ export function Overview() {
           <p className="text-gray-400 text-sm mt-1">
             Gateway traffic and health at a glance
           </p>
-        </div>
-        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <Label
-            htmlFor="routes-only-toggle"
-            className="text-sm text-gray-300 cursor-pointer select-none"
-          >
-            Gateway routes only
-          </Label>
-          <Switch
-            id="routes-only-toggle"
-            checked={routesOnly}
-            onCheckedChange={setRoutesOnly}
-            className="data-[state=checked]:bg-amber-500"
-          />
-          <span
-            className={`text-xs font-medium ${routesOnly ? "text-amber-400" : "text-gray-500"}`}
-          >
-            {routesOnly ? "Filtered" : "All traffic"}
-          </span>
         </div>
       </div>
 

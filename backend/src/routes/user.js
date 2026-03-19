@@ -80,7 +80,7 @@ async function resolveOrCreateProfile(sessionUser) {
       email: sessionUser.email,
       // passwordHash not used — authentication is handled by better-auth
       passwordHash: "managed-by-better-auth",
-      role: sessionUser.role || "viewer",
+      role: sessionUser.role === 'user' ? 'viewer' : (sessionUser.role || 'viewer'),
     });
   }
   return user;
@@ -94,7 +94,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = await resolveOrCreateProfile(req.user);
     // Merge the role from the better-auth session (source of truth for auth)
-    user.role = req.user.role || user.role;
+    const resolvedRole = req.user.role === 'user' ? 'viewer' : req.user.role;
+    user.role = resolvedRole || user.role;
     res.json(serializeUser(user));
   }),
 );

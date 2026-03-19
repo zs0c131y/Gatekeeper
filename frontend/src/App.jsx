@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
-import { GatewayFilterProvider } from "./context/GatewayFilterContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DashboardLayout } from "./Dashboard/DashboardLayout";
@@ -19,7 +18,6 @@ import "./App.css";
 function App() {
   return (
     <AuthProvider>
-      <GatewayFilterProvider>
       <ToastProvider>
       <BrowserRouter>
         <Routes>
@@ -53,7 +51,6 @@ function App() {
         </Routes>
       </BrowserRouter>
       </ToastProvider>
-      </GatewayFilterProvider>
     </AuthProvider>
   );
 }

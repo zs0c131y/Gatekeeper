@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { useGatewayFilter } from "../../context/GatewayFilterContext";
 import {
   Activity,
   Clock,
@@ -137,7 +136,7 @@ function PredictionsSection({ predictions }) {
                 : "warning"
             }
           >
-            {overallHealth.toUpperCase()}
+            {(overallHealth ?? 'unknown').toUpperCase()}
           </Badge>
         </div>
       </CardHeader>
@@ -717,13 +716,11 @@ function ClientActivityTable() {
 export function Analytics() {
   const [hours, setHours] = useState(24);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const { routesOnly } = useGatewayFilter();
-
-  const filterParams = { hours, ...(routesOnly && { routesOnly: "true" }) };
+  const filterParams = { hours };
 
   const { data, loading, error, refetch } = useApi(
     () => api.getAnalysis(filterParams),
-    [hours, routesOnly],
+    [hours],
   );
 
   const {
@@ -736,7 +733,7 @@ export function Analytics() {
     data: errorsData,
     loading: errorsLoading,
     refetch: refetchErrors,
-  } = useApi(() => api.getErrors(filterParams), [hours, routesOnly]);
+  } = useApi(() => api.getErrors(filterParams), [hours]);
 
   useEffect(() => {
     if (!autoRefresh) return;
