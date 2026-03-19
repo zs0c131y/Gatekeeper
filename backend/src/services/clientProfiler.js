@@ -19,7 +19,10 @@ async function recordClientRequest(clientId, clientType, opts = {}) {
   try {
     const now = new Date();
 
-    const existing = await ClientProfile.findOne({ clientId }, { lastSeen: 1, totalRequests: 1, avgRequestInterval: 1 }).lean();
+    const existing = await ClientProfile.findOne(
+      { clientId },
+      { lastSeen: 1, totalRequests: 1, avgRequestInterval: 1 },
+    ).lean();
 
     const update = {
       $inc: { totalRequests: 1 },
@@ -123,7 +126,10 @@ async function recalculateScore(clientId) {
 
     score = Math.max(0, Math.min(100, score));
 
-    await ClientProfile.updateOne({ clientId }, { $set: { behaviorScore: score } });
+    await ClientProfile.updateOne(
+      { clientId },
+      { $set: { behaviorScore: score } },
+    );
     return score;
   } catch (err) {
     logger.error("[ClientProfiler] recalculateScore failed", {
