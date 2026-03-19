@@ -1,5 +1,7 @@
 # Intelligent Adaptive API Gateway
 
+![Gatekeeper Dashboard](./dashboard-working.png)
+
 A high-performance, self-healing API gateway with intelligent rate limiting, circuit breaking, real-time analytics, and a modern React dashboard. Routes requests to microservices, enforces security policies, and provides centralized monitoring.
 
 Built with **Node.js**, **Express**, **MongoDB**, **Redis**, **React**, and **Socket.io**.
