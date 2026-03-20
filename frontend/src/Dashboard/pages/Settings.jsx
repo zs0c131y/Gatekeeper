@@ -46,7 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useApi } from "../../hooks/useApi";
-import { api } from "../../utils/api";
+import { api, API_BASE_URL } from "../../utils/api";
 import { LoadingSkeleton } from "../../components/common/LoadingSkeleton";
 import { ErrorMessage } from "../../components/common/ErrorMessage";
 import { EmptyState } from "../../components/common/EmptyState";
@@ -617,9 +617,9 @@ function ServicesTab({ services, refetch }) {
                     ? "Active"
                     : "Inactive"}
                 </span>
-                {svc.url && (
+                {(svc.prefix || svc.url) && (
                   <a
-                    href={svc.url}
+                    href={svc.prefix ? `${API_BASE_URL}${svc.prefix}` : svc.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1.5 rounded text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"

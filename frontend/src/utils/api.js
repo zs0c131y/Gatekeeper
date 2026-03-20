@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 // better-auth uses HTTP-only cookies; withCredentials ensures the browser
 // sends them with every cross-origin request.
